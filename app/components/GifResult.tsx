@@ -1,0 +1,266 @@
+"use client";
+
+import { useEffect, useRef } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+
+type GifResultProps = {
+  gifUrl: string | null;
+  isConverting: boolean;
+  progress: number | null; // 0..1; null while the converter is still loading
+  error: string | null;
+  /** Output size, known before the GIF exists, so the frame can be sized up front. */
+  size: { width: number; height: number };
+  gifBytes: number | null;
+  downloadName: string;
+  onClose: () => void;
+};
+
+// One layout for all three states (converting / ready / failed): a frame with the
+// GIF's aspect ratio, a status line and a button row. Only their contents change,
+// so the dialog never resizes when the conversion finishes.
+// The frame shows the GIF at its real size, shrinking only to fit the screen.
+// 100cqw/100cqh are the overlay's inner size (a container), so scrollbars and
+// mobile browser bars are already accounted for. The constants are the dialog's
+// own chrome: padding + border (width), and that + gaps + status line + button (height).
+const AVAILABLE_W = "(100cqw - 42px)";
+const AVAILABLE_H = "(100cqh - 128px)";
+
+function frameStyle({ width, height }: { width: number; height: number }): React.CSSProperties {
+  return {
+    aspectRatio: `${width} / ${height}`,
+    // at least 18rem wide (room for messages), at most the GIF's size or the screen
+    width: `max(min(18rem, ${AVAILABLE_W}), min(${width}px, ${AVAILABLE_W}, ${AVAILABLE_H} * ${width / height}))`,
+    minHeight: `min(10rem, ${AVAILABLE_H})`,
+    maxHeight: AVAILABLE_H,
+  };
+}
+
+function formatBytes(bytes: number) {
+  const mb = bytes / (1024 * 1024);
+  return mb >= 1 ? `${mb.toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`;
+}
+
+export function GifResult({ gifUrl, isConverting, progress, error, size, gifBytes, downloadName, onClose }: GifResultProps) {
+  const isReady = gifUrl !== null && !isConverting;
+  const isFailed = error !== null && !isConverting;
+  const isOpen = isConverting || isReady || isFailed;
+
+  // Keyboard/screen-reader focus: into the dialog when it opens and onto the button
+  // that matters when it finishes. The page behind is `inert` meanwhile and gets focus
+  // back on close (see page.tsx).
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const downloadRef = useRef<HTMLAnchorElement>(null);
+  const closeRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (isOpen) dialogRef.current?.focus();
+  }, [isOpen]);
+
+  // Tab / Shift+Tab wrap around inside the dialog instead of leaving it.
+  function trapTab(e: React.KeyboardEvent) {
+    if (e.key !== "Tab") return;
+    const focusable = [...(dialogRef.current?.querySelectorAll<HTMLElement>("a[href], button:not(:disabled)") ?? [])];
+    if (focusable.length === 0) return e.preventDefault();
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (e.shiftKey && (document.activeElement === first || document.activeElement === dialogRef.current)) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault();
+      first.focus();
+    }
+  }
+
+  useEffect(() => {
+    if (isReady) downloadRef.current?.focus();
+    if (isFailed) closeRef.current?.focus();
+  }, [isReady, isFailed]);
+
+  useEffect(() => {
+    if (!isOpen || isConverting) return;
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [isOpen, isConverting, onClose]);
+
+  const pop = {
+    initial: { opacity: 0, scale: 0.9 },
+    animate: { opacity: 1, scale: 1 },
+    transition: { delay: 0.05, type: "spring", stiffness: 300, damping: 22 },
+  } as const;
+
+  return (
+    <AnimatePresence>
+      {isOpen && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.2 }}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-bg/70 p-4 backdrop-blur-sm [container-type:size]"
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !isConverting) onClose();
+          }}
+        >
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9, y: 16 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.9, y: 16 }}
+            transition={{ type: "spring", stiffness: 300, damping: 26 }}
+            ref={dialogRef}
+            tabIndex={-1}
+            onKeyDown={trapTab}
+            role="dialog"
+            aria-modal="true"
+            aria-label={isConverting ? "Converting to GIF" : isFailed ? "Conversion failed" : "GIF ready"}
+            className="relative rounded-xl border border-border bg-surface shadow-2xl"
+          >
+            <button
+              onClick={onClose}
+              disabled={isConverting}
+              aria-label="Close"
+              className={`absolute -top-3 -right-3 flex h-7 w-7 before:absolute before:-inset-2 items-center justify-center rounded-full border border-border bg-surface text-ink-muted shadow-md transition-opacity hover:bg-surface-alt hover:text-ink ${
+                isConverting ? "pointer-events-none opacity-0" : ""
+              }`}
+            >
+              ✕
+            </button>
+
+            <div className="flex flex-col items-center gap-3 p-5 text-center">
+              {/* frame: same box for spinner, GIF and error */}
+              <div
+                className="relative flex items-center justify-center overflow-hidden rounded-lg"
+                style={frameStyle(size)}
+              >
+                {isConverting && (
+                  <>
+                    <div className="h-9 w-9 animate-spin rounded-full border-[3px] border-ink-muted/25 border-t-primary" />
+                    {/* pinned to the frame's bottom edge, so it takes no layout space */}
+                    <div
+                      role="progressbar"
+                      aria-label="Conversion progress"
+                      aria-valuemin={0}
+                      aria-valuemax={100}
+                      aria-valuenow={progress === null ? undefined : Math.round(progress * 100)}
+                      className="absolute inset-x-6 bottom-4 h-1.5 overflow-hidden rounded-full bg-ink/10"
+                    >
+                      <div
+                        className="h-full rounded-full bg-primary transition-[width] duration-100 ease-linear"
+                        style={{ width: `${(progress ?? 0) * 100}%` }}
+                      />
+                    </div>
+                  </>
+                )}
+                {isReady && (
+                  <motion.img {...pop} src={gifUrl} alt="GIF preview" className="h-full w-full object-scale-down" />
+                )}
+                {isFailed && (
+                  <motion.div {...pop} className="flex max-h-full flex-col items-center gap-2 overflow-auto px-2">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-10 w-10 shrink-0 text-danger">
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 4.626c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z"
+                      />
+                    </svg>
+                    <p className="text-xs whitespace-pre-line text-ink-muted">{error}</p>
+                  </motion.div>
+                )}
+              </div>
+
+              {/* screen readers hear the outcome (the % ticks aren't announced, that would be noise) */}
+              <p role="status" className="sr-only">
+                {isConverting
+                  ? "Converting to GIF"
+                  : isReady
+                    ? `GIF ready, ${size.width} by ${size.height} pixels. Download GIF is focused.`
+                    : isFailed
+                      ? `Conversion failed. ${error}`
+                      : ""}
+              </p>
+
+              {/* status line (min-h, not h: survives larger user text spacing, WCAG 1.4.12) */}
+              <div className="flex min-h-6 flex-wrap items-center justify-center gap-2 text-sm font-medium text-ink">
+                {isConverting && (
+                  <span className="font-normal text-ink-muted tabular-nums">
+                    {progress === null ? (
+                      "Loading converter…"
+                    ) : (
+                      <>
+                        Converting to GIF… <span className="inline-block w-[4ch] text-right">{Math.round(progress * 100)}%</span>
+                      </>
+                    )}
+                  </span>
+                )}
+                {isFailed && <span>Conversion failed</span>}
+                {isReady && (
+                  <>
+                    <motion.svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth={2}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      className="h-5 w-5"
+                    >
+                      <motion.circle
+                        cx={12}
+                        cy={12}
+                        r={10}
+                        initial={{ pathLength: 0, opacity: 0 }}
+                        animate={{ pathLength: 1, opacity: 1 }}
+                        transition={{ duration: 0.4, delay: 0.15, ease: "easeOut" }}
+                      />
+                      <motion.path
+                        d="m8 12.5 2.5 2.5L16 9.5"
+                        initial={{ pathLength: 0 }}
+                        animate={{ pathLength: 1 }}
+                        transition={{ duration: 0.3, delay: 0.5, ease: "easeOut" }}
+                      />
+                    </motion.svg>
+                    <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3, delay: 0.55 }}>
+                      GIF ready
+                      <span className="font-normal text-ink-muted tabular-nums">
+                        {" "}· {size.width}×{size.height}
+                        {gifBytes !== null && ` · ${formatBytes(gifBytes)}`}
+                      </span>
+                    </motion.span>
+                  </>
+                )}
+              </div>
+
+              {/* button row: always the same size; disabled while converting */}
+              {isFailed ? (
+                <button
+                  ref={closeRef}
+                  onClick={onClose}
+                  className="w-36 rounded-lg border border-border-strong bg-surface-alt px-4 py-2 text-sm font-medium text-ink transition-colors hover:bg-surface-hover"
+                >
+                  Close
+                </button>
+              ) : (
+                <motion.a
+                  ref={downloadRef}
+                  whileHover={isReady ? { scale: 1.03 } : undefined}
+                  whileTap={isReady ? { scale: 0.97 } : undefined}
+                  href={gifUrl ?? undefined}
+                  download={downloadName}
+                  aria-disabled={!isReady}
+                  className={`w-36 rounded-lg border border-transparent bg-primary px-4 py-2 text-sm font-medium text-ink transition-[background-color,opacity] hover:bg-primary-hover ${
+                    isReady ? "" : "pointer-events-none opacity-40"
+                  }`}
+                >
+                  Download GIF
+                </motion.a>
+              )}
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+}

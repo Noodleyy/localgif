@@ -1,0 +1,47 @@
+import type { ConversionRisk } from "../lib/gif";
+
+// Always rendered with the same structure so the layout never shifts: only the
+// colors, the bar width and the numbers change. Lines with changing numbers are
+// single-line (nowrap); the explanation is static text, so it always wraps the same.
+
+// The level is always spelled out in words too, never shown by color alone.
+const STYLE = {
+  none: { box: "border-border bg-surface-alt/40", bar: "bg-primary", text: "text-ink-muted", label: "Memory OK" },
+  moderate: { box: "border-warning/40 bg-warning/10", bar: "bg-warning", text: "text-warning", label: "Close to the limit" },
+  high: { box: "border-danger/40 bg-danger/10", bar: "bg-danger", text: "text-danger", label: "Likely to run out" },
+};
+
+function formatMB(mb: number) {
+  return mb >= 1024 ? `${(mb / 1024).toFixed(1)} GB` : `${Math.round(mb)} MB`;
+}
+
+function formatSeconds(s: number) {
+  if (s >= 60) return `${Math.floor(s / 60)}m ${Math.floor(s % 60)}s`;
+  return s >= 10 ? `${Math.floor(s)}s` : `${Math.floor(s * 10) / 10}s`;
+}
+
+export function MemoryMeter({ risk }: { risk: ConversionRisk }) {
+  const style = STYLE[risk.level];
+  const fill = Math.min(risk.estimatedMB / risk.limitMB, 1) * 100;
+
+  return (
+    <div className={`flex flex-col gap-2 rounded-lg border px-4 py-3 transition-colors ${style.box}`}>
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3">
+        {/* polite live region: screen readers hear it when the level changes */}
+        <span aria-live="polite" className={`text-sm font-medium whitespace-nowrap ${style.text}`}>
+          {style.label}
+        </span>
+        <span className="text-xs whitespace-nowrap text-ink-muted tabular-nums">
+          ~{formatMB(risk.estimatedMB)} / {formatMB(risk.limitMB)}
+        </span>
+      </div>
+      <div className="h-1.5 overflow-hidden rounded-full bg-ink/10">
+        <div className={`h-full rounded-full transition-all duration-300 ${style.bar}`} style={{ width: `${fill}%` }} />
+      </div>
+      <div className="text-xs text-ink-muted">
+        <p className="truncate tabular-nums">About {formatSeconds(risk.maxSeconds)} fits at this size and FPS.</p>
+        <p>Every GIF frame is held in memory until the end.</p>
+      </div>
+    </div>
+  );
+}

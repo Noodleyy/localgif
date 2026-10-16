@@ -39,3 +39,10 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# local-only
+_backup_before_refactor.zip
+.claude/settings.local.json
+
+# ffmpeg.wasm core, copied from node_modules by scripts/copy-ffmpeg-core.mjs (~31 MB)
+/public/ffmpeg/core/
