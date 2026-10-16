@@ -37,7 +37,8 @@ Notes:
 ```
 app/
   lib/gif.ts         the conversion core: ffmpeg args, convertToGif, probeVideo, out-of-memory estimate
-  lib/ffmpeg.ts      loads ffmpeg.wasm in the browser (once) and resets it after a crash
+  lib/ffmpeg.ts      loads ffmpeg.wasm in the browser (once, with download progress); resets it to cancel or after a crash
+  lib/settings.ts    remembers FPS and quality between visits (localStorage)
   lib/time.ts        clamp / frame-step / timecode helpers
   page.tsx           all app state and handlers
   components/        presentational pieces (upload box, preview, timeline, settings, result modal)
@@ -48,6 +49,7 @@ public/.nojekyll     tells GitHub Pages not to run Jekyll (which would hide the 
 .github/workflows/   deploy.yml: lint, test, build, publish to GitHub Pages
 tests/
   gif.test.ts        fast unit tests for the pure helpers
+  app.test.ts        remembered settings, converter download progress
   convert.test.ts    real MP4 -> GIF conversions through ffmpeg.wasm
   memory.test.ts     checks the out-of-memory estimate against ffmpeg.wasm's real memory use
   helpers.ts         runs ffmpeg.wasm in Node + a tiny GIF parser for assertions
@@ -120,7 +122,7 @@ dialog converting/ready/failed, phone width) plus manual checks. Things to keep 
   meter always says "Memory OK / Close to the limit / Likely to run out").
 - **Focus**: one global `:focus-visible` ring (light purple). Don't add `outline-none`.
 - **Dialog**: focus moves in on open, Tab wraps inside, the page behind is `inert`, focus returns to
-  Convert on close.
+  the button that opened it (Convert or View GIF) on close. Escape closes it, or cancels a running conversion.
 - **Announcements**: `role="status"` / `aria-live` for video loading state, memory level and the
   conversion outcome.
 - **No auto-playing motion** (the background is static); framer animations respect "reduce motion".

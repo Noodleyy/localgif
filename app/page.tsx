@@ -2,9 +2,10 @@
 
 import { useEffect, useRef, useState } from "react";
 import { MotionConfig, motion } from "framer-motion";
-import { getFFmpeg, resetFFmpeg } from "./lib/ffmpeg";
+import { getFFmpeg, onConverterLoad, resetFFmpeg } from "./lib/ffmpeg";
 import { convertToGif, estimateConversionRisk, maxOutputFps, probeVideo, DEFAULT_FPS, type VideoInfo } from "./lib/gif";
 import { clamp, stepFrame } from "./lib/time";
+import { loadSettings, saveSettings } from "./lib/settings";
 import { UploadBox } from "./components/UploadBox";
 import { VideoPreview, type VideoStatus } from "./components/VideoPreview";
 import { ClipControls } from "./components/ClipControls";
@@ -13,6 +14,7 @@ import { MemoryMeter } from "./components/MemoryMeter";
 import { GifResult } from "./components/GifResult";
 
 type VideoMeta = { duration: number; width: number; height: number };
+type Gif = { url: string; bytes: number; width: number; height: number; name: string };
 
 function preload(url: string) {
   const img = new Image();
@@ -58,12 +60,21 @@ export default function Page() {
   const [isPlaying, setIsPlaying] = useState(false);
 
   // Output
-  const [settings, setSettings] = useState<Settings>({ fps: 10, colors: 256, scale: 1 });
+  // FPS and quality as last used in this browser. (Fine to read during hydration: the
+  // settings aren't in the page's HTML, they only show once a video is loaded.)
+  const [settings, setSettings] = useState<Settings>(() => ({ fps: 10, colors: 256, ...loadSettings(), scale: 1 }));
   const [isConverting, setIsConverting] = useState(false);
   const [progress, setProgress] = useState<number | null>(null); // null while the converter is still loading
-  const [gifUrl, setGifUrl] = useState<string | null>(null);
-  const [gifBytes, setGifBytes] = useState<number | null>(null);
+  const [converterLoad, setConverterLoad] = useState<number | null>(null); // 0..1 while the converter downloads
+  const [gif, setGif] = useState<Gif | null>(null); // the last GIF; kept after the dialog closes
+  const [showResult, setShowResult] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Each conversion gets a number; cancelling bumps it, so a cancelled run knows to stop.
+  const runRef = useRef(0);
+  const phaseRef = useRef<"loading" | "converting">("loading");
+  const openerRef = useRef<Element | null>(null); // gets focus back when the dialog closes
+
+  useEffect(() => onConverterLoad(setConverterLoad), []);
 
   const fps = sourceFps ?? DEFAULT_FPS;
 
@@ -77,6 +88,7 @@ export default function Page() {
     setIsPlaying(false);
     setSettings((s) => ({ ...s, scale: 1 }));
     closeResult();
+    discardGif();
 
     const probe = { file: newFile, info: getFFmpeg().then((ffmpeg) => probeVideo(ffmpeg, newFile)) };
     probeRef.current = probe;
@@ -187,14 +199,28 @@ export default function Page() {
 
   const canConvert = !!file && !!meta && (videoStatus === "ready" || videoStatus === "no-preview") && trim.end - trim.start >= 0.01;
 
+  function changeSettings(next: Settings) {
+    setSettings(next);
+    saveSettings(next);
+  }
+
   async function handleConvert() {
     if (!file || !meta || !canConvert) return;
+    const run = ++runRef.current;
+    const isCancelled = () => runRef.current !== run;
+    phaseRef.current = "loading";
+    openerRef.current = document.activeElement;
+    discardGif();
     setError(null);
-    setGifUrl(null);
+    setShowResult(true);
     setIsConverting(true);
     setProgress(null);
+    const size = outputSize;
+    const name = `${file.name.replace(/\.[^.]+$/, "") || "output"}.gif`;
     try {
       const ffmpeg = await getFFmpeg();
+      if (isCancelled()) return;
+      phaseRef.current = "converting";
       setProgress(0);
       const options = {
         start: trim.start,
@@ -204,25 +230,61 @@ export default function Page() {
         width: Math.round(meta.width * settings.scale),
       };
       // whole percents only, so React skips the many updates that don't change the number
-      const gif = await convertToGif(ffmpeg, file, options, (p) => setProgress(Math.floor(p * 100) / 100));
-      const url = URL.createObjectURL(new Blob([gif as Uint8Array<ArrayBuffer>], { type: "image/gif" }));
+      const data = await convertToGif(ffmpeg, file, options, (p) => {
+        if (!isCancelled()) setProgress(Math.floor(p * 100) / 100);
+      });
+      const url = URL.createObjectURL(new Blob([data as Uint8Array<ArrayBuffer>], { type: "image/gif" }));
       await preload(url); // so the preview appears in one go instead of painting in
-      setGifBytes(gif.byteLength);
-      setGifUrl(url);
+      if (isCancelled()) return URL.revokeObjectURL(url);
+      setGif({ url, bytes: data.byteLength, ...size, name });
     } catch (err) {
+      if (isCancelled()) return; // stopped on purpose, not an error
       setError(err instanceof Error ? err.message : String(err));
       resetFFmpeg(); // a crashed (e.g. out-of-memory) wasm instance can't be reused
     } finally {
-      setIsConverting(false);
+      if (!isCancelled()) setIsConverting(false);
     }
   }
 
+  function cancelConversion() {
+    runRef.current++;
+    // Mid-conversion the only way to stop ffmpeg is to kill its worker (it reloads from
+    // the browser cache next time). While the converter is still downloading, let it
+    // finish: the next conversion needs it anyway.
+    if (phaseRef.current === "converting") resetFFmpeg();
+    setIsConverting(false);
+    setShowResult(false);
+  }
+
   function closeResult() {
-    // Free the GIF's memory once the dialog's exit animation is done with it.
-    if (gifUrl) setTimeout(() => URL.revokeObjectURL(gifUrl), 1000);
-    setGifUrl(null);
+    setShowResult(false);
     setError(null);
   }
+
+  function showLastGif() {
+    openerRef.current = document.activeElement;
+    setShowResult(true);
+  }
+
+  function discardGif() {
+    // free the GIF's memory once the dialog's exit animation is done with it
+    if (gif) setTimeout(() => URL.revokeObjectURL(gif.url), 1000);
+    setGif(null);
+  }
+
+  const dialogOpen = isConverting || (showResult && (gif !== null || error !== null));
+
+  // When the dialog closes, focus goes back to the button that opened it (the page
+  // behind was inert, so focus had nowhere else to be).
+  const wasOpenRef = useRef(false);
+  useEffect(() => {
+    if (wasOpenRef.current && !dialogOpen) {
+      const opener = openerRef.current;
+      const target = opener instanceof HTMLElement && opener.isConnected && opener !== document.body ? opener : convertButtonRef.current;
+      target?.focus();
+    }
+    wasOpenRef.current = dialogOpen;
+  }, [dialogOpen]);
 
   const outputSize = {
     width: Math.max(1, Math.round((meta?.width ?? 16) * settings.scale)),
@@ -248,7 +310,7 @@ export default function Page() {
     <MotionConfig reducedMotion="user">
     {/* the page is `inert` while the result dialog is open, so keyboard focus can't wander behind it */}
     <main
-      inert={isConverting || gifUrl !== null || error !== null}
+      inert={dialogOpen}
       // Mobile first: phone layout is the default; sm: / lg: only add to it.
       className="mx-auto w-full max-w-2xl px-4 pt-6 sm:px-6 sm:pt-12 lg:max-w-6xl lg:pt-16 2xl:max-w-7xl"
     >
@@ -276,6 +338,8 @@ export default function Page() {
                 videoRef={videoRef}
                 videoUrl={videoUrl}
                 status={videoStatus}
+                // ffmpeg reads formats the browser can't, so those wait for the converter
+                converterLoad={converterLoad}
                 className="aspect-video w-full lg:max-h-[65vh]"
                 onLoadedMetadata={handleLoadedMetadata}
                 onError={handleVideoError}
@@ -319,7 +383,7 @@ export default function Page() {
               </h2>
               <OutputSettings
                 settings={settings}
-                onChange={setSettings}
+                onChange={changeSettings}
                 maxFps={maxOutputFps(sourceFps)}
                 sourceWidth={meta.width}
               />
@@ -329,15 +393,26 @@ export default function Page() {
             {/* Phones/tablets: a bar stuck to the bottom of the screen, in thumb reach (and
                 clear of the iPhone home indicator). Desktop: a plain button in the sidebar. */}
             <div className="sticky bottom-0 z-10 -mx-4 border-t border-border bg-bg/90 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur sm:bottom-[max(1rem,env(safe-area-inset-bottom))] sm:mx-0 sm:rounded-xl sm:border sm:bg-surface/90 sm:p-3 sm:shadow-lg lg:static lg:rounded-none lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none lg:backdrop-blur-none">
-              <motion.button
-                ref={convertButtonRef}
-                whileTap={{ scale: 0.98 }}
-                onClick={handleConvert}
-                disabled={isConverting || !canConvert}
-                className="block w-full rounded-lg bg-primary py-3 font-medium text-ink transition-colors hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50 sm:mx-auto sm:w-64 lg:w-full lg:py-2.5"
-              >
-                {isConverting ? "Converting..." : "Convert to GIF"}
-              </motion.button>
+              <div className="flex gap-2 sm:justify-center">
+                <motion.button
+                  ref={convertButtonRef}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={handleConvert}
+                  disabled={isConverting || !canConvert}
+                  className="min-w-0 flex-1 rounded-lg border border-transparent bg-primary py-3 font-medium text-ink transition-colors hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50 sm:w-64 sm:flex-none lg:flex-1 lg:py-2.5"
+                >
+                  {isConverting ? "Converting..." : "Convert to GIF"}
+                </motion.button>
+                {/* the last GIF stays available after its dialog is closed */}
+                {gif && !isConverting && (
+                  <button
+                    onClick={showLastGif}
+                    className="shrink-0 rounded-lg border border-border-strong bg-surface-alt px-4 py-3 font-medium text-ink transition-colors hover:bg-surface-hover lg:py-2.5"
+                  >
+                    View GIF
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         )}
@@ -373,18 +448,16 @@ export default function Page() {
     </main>
 
       <GifResult
-        gifUrl={gifUrl}
+        gifUrl={showResult ? (gif?.url ?? null) : null}
         isConverting={isConverting}
         progress={progress}
-        error={error}
-        size={outputSize}
-        gifBytes={gifBytes}
-        downloadName={`${file?.name.replace(/\.[^.]+$/, "") || "output"}.gif`}
-        onClose={() => {
-          closeResult();
-          // give keyboard focus back to where the user started (after the page stops being inert)
-          requestAnimationFrame(() => convertButtonRef.current?.focus());
-        }}
+        loadProgress={converterLoad}
+        error={showResult ? error : null}
+        size={isConverting || !gif ? outputSize : gif}
+        gifBytes={gif?.bytes ?? null}
+        downloadName={gif?.name ?? "output.gif"}
+        onClose={closeResult}
+        onCancel={cancelConversion}
       />
     </MotionConfig>
   );

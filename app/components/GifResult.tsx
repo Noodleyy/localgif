@@ -7,12 +7,14 @@ type GifResultProps = {
   gifUrl: string | null;
   isConverting: boolean;
   progress: number | null; // 0..1; null while the converter is still loading
+  loadProgress: number | null; // 0..1 while the converter downloads
   error: string | null;
   /** Output size, known before the GIF exists, so the frame can be sized up front. */
   size: { width: number; height: number };
   gifBytes: number | null;
   downloadName: string;
   onClose: () => void;
+  onCancel: () => void;
 };
 
 // One layout for all three states (converting / ready / failed): a frame with the
@@ -40,7 +42,7 @@ function formatBytes(bytes: number) {
   return mb >= 1 ? `${mb.toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`;
 }
 
-export function GifResult({ gifUrl, isConverting, progress, error, size, gifBytes, downloadName, onClose }: GifResultProps) {
+export function GifResult({ gifUrl, isConverting, progress, loadProgress, error, size, gifBytes, downloadName, onClose, onCancel }: GifResultProps) {
   const isReady = gifUrl !== null && !isConverting;
   const isFailed = error !== null && !isConverting;
   const isOpen = isConverting || isReady || isFailed;
@@ -77,14 +79,19 @@ export function GifResult({ gifUrl, isConverting, progress, error, size, gifByte
     if (isFailed) closeRef.current?.focus();
   }, [isReady, isFailed]);
 
+  // Escape closes the dialog, or cancels a conversion that's still running.
   useEffect(() => {
-    if (!isOpen || isConverting) return;
+    if (!isOpen) return;
     function onKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") (isConverting ? onCancel : onClose)();
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [isOpen, isConverting, onClose]);
+  }, [isOpen, isConverting, onClose, onCancel]);
+
+  // the bar shows the converter's download first, then the conversion
+  const loading = progress === null;
+  const barValue = loading ? loadProgress : progress;
 
   const pop = {
     initial: { opacity: 0, scale: 0.9 },
@@ -141,15 +148,15 @@ export function GifResult({ gifUrl, isConverting, progress, error, size, gifByte
                     {/* pinned to the frame's bottom edge, so it takes no layout space */}
                     <div
                       role="progressbar"
-                      aria-label="Conversion progress"
+                      aria-label={loading ? "Loading converter" : "Conversion progress"}
                       aria-valuemin={0}
                       aria-valuemax={100}
-                      aria-valuenow={progress === null ? undefined : Math.round(progress * 100)}
+                      aria-valuenow={barValue === null ? undefined : Math.round(barValue * 100)}
                       className="absolute inset-x-6 bottom-4 h-1.5 overflow-hidden rounded-full bg-ink/10"
                     >
                       <div
                         className="h-full rounded-full bg-primary transition-[width] duration-100 ease-linear"
-                        style={{ width: `${(progress ?? 0) * 100}%` }}
+                        style={{ width: `${(barValue ?? 0) * 100}%` }}
                       />
                     </div>
                   </>
@@ -186,13 +193,10 @@ export function GifResult({ gifUrl, isConverting, progress, error, size, gifByte
               <div className="flex min-h-6 flex-wrap items-center justify-center gap-2 text-sm font-medium text-ink">
                 {isConverting && (
                   <span className="font-normal text-ink-muted tabular-nums">
-                    {progress === null ? (
-                      "Loading converter…"
-                    ) : (
-                      <>
-                        Converting to GIF… <span className="inline-block w-[4ch] text-right">{Math.round(progress * 100)}%</span>
-                      </>
-                    )}
+                    {loading ? "Loading converter…" : "Converting to GIF…"}{" "}
+                    <span className="inline-block w-[4ch] text-right">
+                      {barValue !== null && `${Math.round(barValue * 100)}%`}
+                    </span>
                   </span>
                 )}
                 {isFailed && <span>Conversion failed</span>}
@@ -233,8 +237,15 @@ export function GifResult({ gifUrl, isConverting, progress, error, size, gifByte
                 )}
               </div>
 
-              {/* button row: always the same size; disabled while converting */}
-              {isFailed ? (
+              {/* button row: one button of the same size in every state */}
+              {isConverting ? (
+                <button
+                  onClick={onCancel}
+                  className="w-36 rounded-lg border border-border-strong bg-surface-alt px-4 py-2 text-sm font-medium text-ink transition-colors hover:bg-surface-hover"
+                >
+                  Cancel
+                </button>
+              ) : isFailed ? (
                 <button
                   ref={closeRef}
                   onClick={onClose}

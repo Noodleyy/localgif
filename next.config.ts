@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { statSync } from "node:fs";
 
 // Built as a static site (plain HTML/CSS/JS in out/) so it can be hosted on GitHub Pages.
 //
@@ -10,6 +11,10 @@ import type { NextConfig } from "next";
 // they're only needed by the multi-threaded ffmpeg core — we use the single-threaded one.
 const basePath = process.env.BASE_PATH ?? "";
 
+// The converter's size, so the app can show download progress (0 = unknown, no percentage).
+// scripts/copy-ffmpeg-core.mjs puts the file there before every dev/build.
+const wasmBytes = statSync("public/ffmpeg/core/ffmpeg-core.wasm", { throwIfNoEntry: false })?.size ?? 0;
+
 const nextConfig: NextConfig = {
   output: "export",
   basePath,
@@ -19,6 +24,7 @@ const nextConfig: NextConfig = {
     NEXT_PUBLIC_BASE_PATH: basePath, // for URLs built in client code (the ffmpeg files)
     // link to the source code in the footer (GPL); the deploy workflow sets REPO_URL
     NEXT_PUBLIC_REPO_URL: process.env.REPO_URL ?? "",
+    NEXT_PUBLIC_FFMPEG_WASM_BYTES: String(wasmBytes),
   },
 };
 
