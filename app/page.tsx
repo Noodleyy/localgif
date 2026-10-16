@@ -342,6 +342,34 @@ export default function Page() {
           </div>
         )}
       </div>
+
+      {/* GPL: say what the app is built on and where its source lives */}
+      <footer className="pt-2 pb-8 text-center text-xs leading-relaxed text-ink-muted">
+        <p>Runs entirely in your browser — your video never leaves your device.</p>
+        <p>
+          Converts with{" "}
+          <a href="https://ffmpeg.org" className="text-ink underline underline-offset-2">
+            FFmpeg
+          </a>{" "}
+          via{" "}
+          <a href="https://github.com/ffmpegwasm/ffmpeg.wasm" className="text-ink underline underline-offset-2">
+            ffmpeg.wasm
+          </a>{" "}
+          (GPL). This app is free software under the{" "}
+          <a href="https://www.gnu.org/licenses/gpl-3.0.html" className="text-ink underline underline-offset-2">
+            GPL-3.0
+          </a>
+          {process.env.NEXT_PUBLIC_REPO_URL && (
+            <>
+              {" · "}
+              <a href={process.env.NEXT_PUBLIC_REPO_URL} className="text-ink underline underline-offset-2">
+                Source code
+              </a>
+            </>
+          )}
+          .
+        </p>
+      </footer>
     </main>
 
       <GifResult

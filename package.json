@@ -2,8 +2,11 @@
   "name": "nobsvideo2gif",
   "version": "0.1.0",
   "private": true,
+  "license": "GPL-3.0-or-later",
   "scripts": {
+    "predev": "node scripts/copy-ffmpeg-core.mjs",
     "dev": "next dev",
+    "prebuild": "node scripts/copy-ffmpeg-core.mjs",
     "build": "next build",
     "start": "npx --yes serve@14.2.4 out",
     "lint": "eslint",
@@ -11,15 +14,14 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@ffmpeg/core": "0.12.10",
     "@ffmpeg/ffmpeg": "^0.12.15",
-    "@ffmpeg/util": "^0.12.2",
     "framer-motion": "^13.0.0",
     "next": "16.2.12",
     "react": "19.2.4",
     "react-dom": "19.2.4"
   },
   "devDependencies": {
-    "@ffmpeg/core": "0.12.10",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",

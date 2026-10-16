@@ -1,6 +1,6 @@
 # nobsvideo2gif
 
-Convert a video (MP4, MOV, WebM, HEVC, AVI, MKV…) to a GIF entirely in the browser with [ffmpeg.wasm](https://github.com/ffmpegwasm/ffmpeg.wasm). Nothing is uploaded.
+Convert a video (MP4, MOV, WebM, HEVC, AVI, MKV…) to a GIF entirely in the browser with [ffmpeg.wasm](https://github.com/ffmpegwasm/ffmpeg.wasm). Nothing is uploaded, and nothing is loaded from other sites: the converter is served by the site itself.
 
 ```bash
 npm install
@@ -28,7 +28,9 @@ Notes:
   sub-path build locally: `BASE_PATH=/<repo> npm run build`, then serve `out/` under `/<repo>/`.
 - No special server headers are needed (GitHub Pages can't set them anyway): the single-threaded
   ffmpeg.wasm core doesn't need cross-origin isolation.
-- The converter itself (~30 MB) is downloaded from unpkg.com on first use, as before.
+- The converter (`@ffmpeg/core`, ~31 MB) is copied from `node_modules` into `public/ffmpeg/core/` by
+  `scripts/copy-ffmpeg-core.mjs` before every `dev`/`build`, and served by the site itself — no CDN.
+  It's git-ignored; to update it, bump `@ffmpeg/core` in `package.json` (the tests use the same copy).
 
 ## Layout
 
@@ -39,7 +41,9 @@ app/
   lib/time.ts        clamp / frame-step / timecode helpers
   page.tsx           all app state and handlers
   components/        presentational pieces (upload box, preview, timeline, settings, result modal)
-public/ffmpeg/       copy of @ffmpeg/ffmpeg's worker (bundlers break the original's worker import)
+public/ffmpeg/       copy of @ffmpeg/ffmpeg's worker (bundlers break the original's worker import);
+                     core/ gets the converter itself at dev/build time (git-ignored)
+scripts/             copy-ffmpeg-core.mjs
 public/.nojekyll     tells GitHub Pages not to run Jekyll (which would hide the _next/ folder)
 .github/workflows/   deploy.yml: lint, test, build, publish to GitHub Pages
 tests/
@@ -53,7 +57,7 @@ tests/
 ## Tests
 
 `tests/convert.test.ts` runs `convertToGif` against the **same ffmpeg.wasm build the browser downloads**
-(`@ffmpeg/core`, pinned to the version in `app/lib/ffmpeg.ts` — bump both together), so it has the
+(`@ffmpeg/core` from `node_modules`, which is also what the site serves), so it has the
 same 2 GiB memory limit. Test videos are generated on the fly with ffmpeg's built-in test sources:
 
 | video | what it covers |
@@ -121,3 +125,15 @@ dialog converting/ready/failed, phone width) plus manual checks. Things to keep 
   conversion outcome.
 - **No auto-playing motion** (the background is static); framer animations respect "reduce motion".
 - **Targets** are at least 24px (small buttons get an invisible `before:` hit area).
+
+## License
+
+Copyright (C) 2026 Noodleyy
+
+This program is free software: you can redistribute it and/or modify it under the terms of the
+GNU General Public License as published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version. See `LICENSE`.
+
+It's distributed with FFmpeg (via ffmpeg.wasm, GPL-2.0-or-later) and some MIT-licensed libraries —
+see `THIRD_PARTY_NOTICES.md`. The app's footer links to these licenses and, when deployed with the
+workflow, to this repository's source code.

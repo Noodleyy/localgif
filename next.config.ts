@@ -15,7 +15,11 @@ const nextConfig: NextConfig = {
   basePath,
   trailingSlash: true, // /mp4togif/ -> /mp4togif/index.html, which is what Pages serves
   images: { unoptimized: true }, // no image server on a static host
-  env: { NEXT_PUBLIC_BASE_PATH: basePath }, // for URLs built in client code (the ffmpeg worker)
+  env: {
+    NEXT_PUBLIC_BASE_PATH: basePath, // for URLs built in client code (the ffmpeg files)
+    // link to the source code in the footer (GPL); the deploy workflow sets REPO_URL
+    NEXT_PUBLIC_REPO_URL: process.env.REPO_URL ?? "",
+  },
 };
 
 export default nextConfig;
