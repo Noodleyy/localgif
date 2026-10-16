@@ -76,7 +76,20 @@ export function ClipControls(p: ClipControlsProps) {
       {/* two fixed halves: the FPS appearing later doesn't push "Length" sideways */}
       <div className="grid grid-cols-2 gap-4 text-sm text-ink-muted tabular-nums">
         <span className="text-right">Length {formatTimecode(p.duration)}</span>
-        <span>FPS {p.sourceFps !== null ? p.sourceFps.toFixed(2) : "…"}</span>
+        <span>
+          FPS{" "}
+          {p.sourceFps !== null ? (
+            p.sourceFps.toFixed(2)
+          ) : (
+            // placeholder block the size of the number, until ffprobe has read it
+            <>
+              <span className="skeleton-inline" aria-hidden="true">
+                00.00
+              </span>
+              <span className="sr-only">loading</span>
+            </>
+          )}
+        </span>
       </div>
 
       <p className="text-center text-xs text-ink-muted">Drag the white handles, or fine-tune frame by frame:</p>

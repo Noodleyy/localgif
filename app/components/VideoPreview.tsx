@@ -56,8 +56,8 @@ export function VideoPreview({ videoRef, videoUrl, status, converterLoad = null,
       />
 
       {status === "loading" && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 rounded-xl bg-bg/80 backdrop-blur-sm">
-          <div className="h-9 w-9 animate-spin rounded-full border-[3px] border-ink-muted/25 border-t-primary" />
+        // shimmering placeholder where the video will appear
+        <div className="skeleton-fill absolute inset-2 flex flex-col items-center justify-center gap-2 sm:inset-4">
           <p className="text-sm text-ink-muted">Loading video…</p>
           {/* always there (even empty), so the spinner doesn't move when it fills in */}
           <p className="min-h-4 text-xs text-ink-muted tabular-nums">

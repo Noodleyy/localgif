@@ -24,6 +24,8 @@
 }
 
 html {
+  /* lets CSS transitions run to and from height: auto (the upload box collapsing) */
+  interpolate-size: allow-keywords;
   /* native controls (sliders, number box, scrollbars) render in their dark variant */
   color-scheme: dark;
   /* reserve the scrollbar's space so the page doesn't shift sideways when it appears */
@@ -68,4 +70,106 @@ body {
   background:
     radial-gradient(60rem 40rem at 15% -10%, rgb(124 58 237 / 0.28), transparent 70%),
     radial-gradient(50rem 35rem at 100% 110%, rgb(109 40 217 / 0.2), transparent 70%);
+}
+
+/* ---------------------------------------------------------------------------------
+   Loading skeletons (YouTube-style).
+   .skeleton turns a real, fully laid-out card into its own placeholder: every piece
+   of text and every control becomes a soft block in exactly its place, so nothing
+   moves when the real values arrive. The shimmer is one gradient fixed to the
+   screen, so it sweeps across all blocks together.
+   --------------------------------------------------------------------------------- */
+:root {
+  --skeleton: #241f30; /* opaque, so nested blocks don't add up */
+  --skeleton-shine: #322b43;
+}
+
+.skeleton *,
+.skeleton *::before {
+  color: transparent;
+  border-color: transparent;
+  background-color: transparent;
+  box-shadow: none;
+}
+.skeleton :is(svg, img, video) {
+  visibility: hidden;
+}
+.skeleton :is(h2, p, label:not(:has(input)), button, input, span:not(:has(*)), [data-skeleton="block"]),
+.skeleton-fill,
+.skeleton-inline {
+  background-color: var(--skeleton);
+  border-radius: 0.375rem;
+}
+/* text blocks are as wide as their text, and aligned like it */
+.skeleton :is(h2, p, label:not(:has(input)), span:not(:has(*))) {
+  width: fit-content;
+  max-width: 100%;
+  /* a little gap between stacked lines, without changing the layout */
+  clip-path: inset(2px 0 round 0.375rem);
+}
+.skeleton :is(.text-center, .text-center > *) {
+  margin-inline: auto;
+}
+.skeleton .text-right {
+  margin-left: auto;
+}
+/* range sliders: just their track (no shimmer: it would move the track itself) */
+.skeleton input[type="range"] {
+  appearance: none;
+  background: linear-gradient(var(--skeleton), var(--skeleton)) center / 100% 0.5rem no-repeat;
+  animation: none !important;
+}
+.skeleton input[type="range"]::-webkit-slider-thumb {
+  opacity: 0;
+}
+.skeleton input[type="range"]::-moz-range-thumb {
+  opacity: 0;
+}
+.skeleton-inline {
+  color: transparent;
+}
+
+/* fade the real content in where the skeleton was */
+@keyframes reveal {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes shimmer {
+  from {
+    background-position: -180vw 0;
+  }
+  to {
+    background-position: -20vw 0;
+  }
+}
+
+/* glossy highlight running over a progress bar's filled part */
+@keyframes shine {
+  from {
+    background-position: 150% 0;
+  }
+  to {
+    background-position: -50% 0;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .skeleton :is(h2, p, label:not(:has(input)), button, input, span:not(:has(*)), [data-skeleton="block"]),
+  .skeleton-fill,
+  .skeleton-inline {
+    background-image: linear-gradient(100deg, transparent 45%, var(--skeleton-shine) 50%, transparent 55%);
+    background-size: 300vw 100%;
+    background-attachment: fixed;
+    animation: shimmer 1.6s linear infinite;
+  }
+  .reveal > * {
+    animation: reveal 0.4s ease-out;
+  }
+  .progress-shine {
+    background-image: linear-gradient(100deg, transparent 35%, rgb(255 255 255 / 0.28) 50%, transparent 65%);
+    background-size: 200% 100%;
+    animation: shine 1.4s linear infinite;
+  }
 }

@@ -139,12 +139,26 @@ export function GifResult({ gifUrl, isConverting, progress, loadProgress, error,
             <div className="flex flex-col items-center gap-3 p-5 text-center">
               {/* frame: same box for spinner, GIF and error */}
               <div
-                className="relative flex items-center justify-center overflow-hidden rounded-lg"
+                className={`relative flex items-center justify-center overflow-hidden rounded-lg ${isConverting ? "skeleton-fill" : ""}`}
                 style={frameStyle(size)}
               >
                 {isConverting && (
                   <>
-                    <div className="h-9 w-9 animate-spin rounded-full border-[3px] border-ink-muted/25 border-t-primary" />
+                    {/* shimmering placeholder where the GIF will appear */}
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth={1.5}
+                      aria-hidden="true"
+                      className="h-10 w-10 text-ink-muted/60 motion-safe:animate-pulse"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 0 0 1.5-1.5V6a1.5 1.5 0 0 0-1.5-1.5H3.75A1.5 1.5 0 0 0 2.25 6v12a1.5 1.5 0 0 0 1.5 1.5Zm10.5-11.25h.008v.008h-.008V8.25Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z"
+                      />
+                    </svg>
                     {/* pinned to the frame's bottom edge, so it takes no layout space */}
                     <div
                       role="progressbar"
@@ -155,7 +169,7 @@ export function GifResult({ gifUrl, isConverting, progress, loadProgress, error,
                       className="absolute inset-x-6 bottom-4 h-1.5 overflow-hidden rounded-full bg-ink/10"
                     >
                       <div
-                        className="h-full rounded-full bg-primary transition-[width] duration-100 ease-linear"
+                        className="progress-shine h-full rounded-full bg-primary transition-[width] duration-300 ease-out"
                         style={{ width: `${(barValue ?? 0) * 100}%` }}
                       />
                     </div>
@@ -257,6 +271,9 @@ export function GifResult({ gifUrl, isConverting, progress, loadProgress, error,
                 <motion.a
                   ref={downloadRef}
                   whileHover={isReady ? { scale: 1.03 } : undefined}
+                  // one soft purple pulse when the GIF is ready, to draw the eye to Download
+                  animate={isReady ? { boxShadow: ["0 0 0 0px rgb(124 58 237 / 0.7)", "0 0 0 12px rgb(124 58 237 / 0)"] } : undefined}
+                  transition={{ boxShadow: { duration: 0.9, delay: 0.6, ease: "easeOut" } }}
                   whileTap={isReady ? { scale: 0.97 } : undefined}
                   href={gifUrl ?? undefined}
                   download={downloadName}

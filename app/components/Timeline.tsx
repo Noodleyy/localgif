@@ -89,6 +89,7 @@ export function Timeline({ duration, currentTime, trim, onSeek, onTrimChange, on
       ref={trackRef}
       onPointerDown={scrub}
       onPointerMove={scrub}
+      data-skeleton="block"
       className="group relative flex h-8 w-full cursor-pointer sm:h-6 touch-none items-center select-none"
     >
       {/* full-length track */}

@@ -42,9 +42,13 @@ export function UploadBox({ onFileSelect, file }: UploadBoxProps) {
     <motion.div
       role="button"
       tabIndex={0}
+      // fades in with the page; the icon lifts on hover and while a file is dragged over
+      initial={{ opacity: 0, y: 8 }}
+      variants={{ rest: { opacity: 1, y: 0, scale: 1 }, drag: { opacity: 1, y: 0, scale: 1.01 }, hover: {} }}
+      animate={isDragging ? "drag" : "rest"}
+      whileHover="hover"
       whileTap={{ scale: 0.99 }}
-      animate={isDragging ? { scale: 1.01 } : { scale: 1 }}
-      transition={{ type: "spring", stiffness: 300, damping: 22 }}
+      transition={{ type: "spring", stiffness: 300, damping: 22, opacity: { duration: 0.4, delay: 0.1 } }}
       onClick={() => inputRef.current?.click()}
       onKeyDown={(e) => {
         if (e.key !== "Enter" && e.key !== " ") return;
@@ -60,7 +64,10 @@ export function UploadBox({ onFileSelect, file }: UploadBoxProps) {
         if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setIsDragging(false);
       }}
       onDrop={handleDrop}
-      className={`w-full cursor-pointer rounded-xl border-2 border-dashed transition-colors ${surface} ${
+      // Picking a file shrinks the drop zone into a bar. The height eases between the two
+      // (CSS can transition to/from height:auto thanks to interpolate-size in globals.css;
+      // browsers without it just switch).
+      className={`w-full cursor-pointer overflow-hidden rounded-xl border-2 border-dashed transition-[height,padding,border-color,background-color] duration-300 ease-out motion-reduce:transition-colors ${surface} ${
         file
           ? "flex items-center gap-3 px-4 py-3"
           : "flex h-56 flex-col items-center justify-center gap-3 p-6 text-center sm:h-72 lg:h-80"
@@ -73,7 +80,7 @@ export function UploadBox({ onFileSelect, file }: UploadBoxProps) {
         strokeWidth={1.5}
         aria-hidden="true"
         className={`shrink-0 ${file ? "h-6 w-6" : "h-8 w-8"} ${mutedTextClass}`}
-        animate={isDragging ? { y: -3 } : { y: 0 }}
+        variants={{ rest: { y: 0 }, drag: { y: -3 }, hover: { y: -3 } }}
         transition={{ type: "spring", stiffness: 300, damping: 15 }}
       >
         <path strokeLinecap="round" strokeLinejoin="round" d={uploadIcon} />

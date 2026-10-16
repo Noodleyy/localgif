@@ -10,6 +10,8 @@ type OutputSettingsProps = {
   settings: Settings;
   onChange: (settings: Settings) => void;
   maxFps: number;
+  /** the video's frame rate (and so maxFps) is still being read */
+  maxFpsLoading?: boolean;
   sourceWidth: number;
 };
 
@@ -17,7 +19,7 @@ type OutputSettingsProps = {
 const roundButtonClass =
   "relative flex h-8 w-8 before:absolute before:-inset-1.5 items-center sm:h-6 sm:w-6 sm:before:-inset-2 justify-center rounded-full border border-border-strong bg-surface-alt text-ink shadow-sm hover:bg-surface-hover";
 
-export function OutputSettings({ settings, onChange, maxFps, sourceWidth }: OutputSettingsProps) {
+export function OutputSettings({ settings, onChange, maxFps, maxFpsLoading = false, sourceWidth }: OutputSettingsProps) {
   const set = (patch: Partial<Settings>) => onChange({ ...settings, ...patch });
   const setFps = (fps: number) => set({ fps: clamp(Math.round(fps), 1, maxFps) });
   // What's being typed into the FPS box, so it can be cleared/retyped without snapping back.
@@ -30,7 +32,21 @@ export function OutputSettings({ settings, onChange, maxFps, sourceWidth }: Outp
       <div className="flex items-center justify-between gap-3 sm:flex-col sm:items-start sm:justify-start lg:flex-row lg:items-center lg:justify-between">
         {/* a real <label>, so the box's spoken name matches what's on screen (WCAG 2.5.3) */}
         <label htmlFor="gif-fps" className="text-ink">
-          FPS <span className="text-ink-muted">(max {maxFps})</span>
+          FPS{" "}
+          <span className="text-ink-muted">
+            (max{" "}
+            {maxFpsLoading ? (
+              <>
+                <span className="skeleton-inline" aria-hidden="true">
+                  00
+                </span>
+                <span className="sr-only">loading</span>
+              </>
+            ) : (
+              maxFps
+            )}
+            )
+          </span>
         </label>
         <div className="flex items-center gap-3 sm:gap-2">
           <button

@@ -16,6 +16,10 @@ import { GifResult } from "./components/GifResult";
 type VideoMeta = { duration: number; width: number; height: number };
 type Gif = { url: string; bytes: number; width: number; height: number; name: string };
 
+// Shape for the skeleton cards shown while the first video loads (the cards render
+// for real, as placeholders, so they take exactly their final space).
+const PLACEHOLDER_META: VideoMeta = { duration: 10, width: 1920, height: 1080 };
+
 function preload(url: string) {
   const img = new Image();
   img.src = url;
@@ -286,15 +290,20 @@ export default function Page() {
     wasOpenRef.current = dialogOpen;
   }, [dialogOpen]);
 
+  // While a video loads, the cards show as skeletons: over the previous video's values,
+  // or placeholder ones for the first video.
+  const isLoading = file !== null && videoStatus === "loading";
+  const cardMeta = meta ?? (isLoading ? PLACEHOLDER_META : null);
+
   const outputSize = {
-    width: Math.max(1, Math.round((meta?.width ?? 16) * settings.scale)),
-    height: Math.max(1, Math.round((meta?.height ?? 9) * settings.scale)),
+    width: Math.max(1, Math.round((cardMeta?.width ?? 16) * settings.scale)),
+    height: Math.max(1, Math.round((cardMeta?.height ?? 9) * settings.scale)),
   };
-  const risk = meta
+  const risk = cardMeta
     ? estimateConversionRisk({
-        clipDuration: trim.end - trim.start,
-        sourceWidth: meta.width,
-        sourceHeight: meta.height,
+        clipDuration: (meta ? trim.end - trim.start : cardMeta.duration),
+        sourceWidth: cardMeta.width,
+        sourceHeight: cardMeta.height,
         outputFps: settings.fps,
         outputWidth: outputSize.width,
         outputHeight: outputSize.height,
@@ -302,6 +311,9 @@ export default function Page() {
     : null;
 
   const card = "rounded-xl border border-border bg-surface p-4 sm:p-6";
+  // skeleton while loading (inert: nothing in it can be used yet), fade-in once loaded
+  const loadState = isLoading ? "skeleton" : "reveal";
+  const loadProps = { inert: isLoading, "aria-busy": isLoading };
   const cardHeading = "text-xs font-semibold tracking-wide text-ink-muted uppercase";
   const fadeIn = { initial: { opacity: 0, y: 8 }, animate: { opacity: 1, y: 0 }, transition: { duration: 0.3, ease: "easeOut" } } as const;
 
@@ -351,13 +363,13 @@ export default function Page() {
             </motion.div>
           )}
 
-          {meta && (
-            <motion.section {...fadeIn} aria-labelledby="trim-heading" className={card}>
+          {cardMeta && (
+            <motion.section {...fadeIn} {...loadProps} aria-labelledby="trim-heading" className={`${card} ${loadState}`}>
               <h2 id="trim-heading" className={`${cardHeading} mb-4`}>
                 Trim
               </h2>
               <ClipControls
-                duration={meta.duration}
+                duration={cardMeta.duration}
                 sourceFps={sourceFps}
                 currentTime={currentTime}
                 isPlaying={isPlaying}
@@ -373,11 +385,16 @@ export default function Page() {
           )}
         </div>
 
-        {meta && (
+        {cardMeta && (
           // `contents` below lg: this wrapper disappears from layout, so the Convert bar
           // can stick to the bottom of the whole page. On desktop it's the sticky sidebar.
           <div className="contents lg:sticky lg:top-6 lg:flex lg:flex-col lg:gap-6 lg:self-start">
-            <motion.section {...fadeIn} aria-labelledby="output-heading" className={`${card} flex flex-col gap-5`}>
+            <motion.section
+              {...fadeIn}
+              {...loadProps}
+              aria-labelledby="output-heading"
+              className={`${card} flex flex-col gap-5 ${loadState}`}
+            >
               <h2 id="output-heading" className={cardHeading}>
                 Output
               </h2>
@@ -385,7 +402,8 @@ export default function Page() {
                 settings={settings}
                 onChange={changeSettings}
                 maxFps={maxOutputFps(sourceFps)}
-                sourceWidth={meta.width}
+                maxFpsLoading={sourceFps === null}
+                sourceWidth={cardMeta.width}
               />
               {risk && <MemoryMeter risk={risk} />}
             </motion.section>
@@ -393,24 +411,30 @@ export default function Page() {
             {/* Phones/tablets: a bar stuck to the bottom of the screen, in thumb reach (and
                 clear of the iPhone home indicator). Desktop: a plain button in the sidebar. */}
             <div className="sticky bottom-0 z-10 -mx-4 border-t border-border bg-bg/90 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur sm:bottom-[max(1rem,env(safe-area-inset-bottom))] sm:mx-0 sm:rounded-xl sm:border sm:bg-surface/90 sm:p-3 sm:shadow-lg lg:static lg:rounded-none lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none lg:backdrop-blur-none">
-              <div className="flex gap-2 sm:justify-center">
+              <div {...loadProps} className={`flex gap-2 sm:justify-center ${loadState}`}>
                 <motion.button
                   ref={convertButtonRef}
+                  whileHover={canConvert && !isConverting ? { y: -1 } : undefined}
                   whileTap={{ scale: 0.98 }}
                   onClick={handleConvert}
                   disabled={isConverting || !canConvert}
-                  className="min-w-0 flex-1 rounded-lg border border-transparent bg-primary py-3 font-medium text-ink transition-colors hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50 sm:w-64 sm:flex-none lg:flex-1 lg:py-2.5"
+                  className="min-w-0 flex-1 rounded-lg border border-transparent bg-primary py-3 font-medium text-ink transition-[background-color,box-shadow,opacity] duration-200 enabled:hover:bg-primary-hover enabled:hover:shadow-[0_8px_24px_-8px_rgb(124_58_237/0.8)] disabled:cursor-not-allowed disabled:opacity-50 sm:w-64 sm:flex-none lg:flex-1 lg:py-2.5"
                 >
                   {isConverting ? "Converting..." : "Convert to GIF"}
                 </motion.button>
                 {/* the last GIF stays available after its dialog is closed */}
                 {gif && !isConverting && (
-                  <button
+                  <motion.button
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    whileHover={{ y: -1 }}
+                    whileTap={{ scale: 0.97 }}
+                    transition={{ type: "spring", stiffness: 400, damping: 25 }}
                     onClick={showLastGif}
                     className="shrink-0 rounded-lg border border-border-strong bg-surface-alt px-4 py-3 font-medium text-ink transition-colors hover:bg-surface-hover lg:py-2.5"
                   >
                     View GIF
-                  </button>
+                  </motion.button>
                 )}
               </div>
             </div>
@@ -419,7 +443,12 @@ export default function Page() {
       </div>
 
       {/* GPL: say what the app is built on and where its source lives */}
-      <footer className="pt-2 pb-8 text-center text-xs leading-relaxed text-ink-muted">
+      <motion.footer
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.5, delay: 0.25 }}
+        className="pt-2 pb-8 text-center text-xs leading-relaxed text-ink-muted"
+      >
         <p>Runs entirely in your browser — your video never leaves your device.</p>
         <p>
           Converts with{" "}
@@ -444,7 +473,7 @@ export default function Page() {
           )}
           .
         </p>
-      </footer>
+      </motion.footer>
     </main>
 
       <GifResult
