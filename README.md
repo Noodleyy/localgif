@@ -17,11 +17,11 @@ The app builds to a plain static site (`output: "export"` in `next.config.ts`), 
 
 1. Push the repo to GitHub.
 2. **Settings → Pages → Build and deployment → Source: GitHub Actions** (one-time).
-3. Push to `main` — or run **Deploy to GitHub Pages** by hand from the Actions tab.
+3. Push to `master` — or run **Deploy to GitHub Pages** by hand from the Actions tab.
    The site appears at `https://<user>.github.io/<repo>/`.
 
 Notes:
-- The workflow deploys from `main`. To deploy from another branch, change `branches:` in the
+- The workflow deploys from `master`. To deploy from another branch, change `branches:` in the
   workflow, and allow that branch under **Settings → Environments → github-pages**.
 - The sub-path (`/<repo>`) is detected automatically (`actions/configure-pages`) and passed in as
   `BASE_PATH`; user sites (`<user>.github.io`) and custom domains get no sub-path. To try a
