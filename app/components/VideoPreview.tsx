@@ -8,9 +8,8 @@ type VideoPreviewProps = {
   videoRef: React.RefObject<HTMLVideoElement | null>;
   videoUrl: string;
   status: VideoStatus;
-  /** converter download progress, 0..1 (null when not downloading) */
-  converterLoad?: number | null;
-  className?: string; // size
+  converterLoad: number | null; // 0..1 while the converter downloads
+  className?: string;
   onLoadedMetadata: (e: React.SyntheticEvent<HTMLVideoElement>) => void;
   onError: () => void;
   onTimeUpdate: (e: React.SyntheticEvent<HTMLVideoElement>) => void;
@@ -30,7 +29,7 @@ const MESSAGES = {
   },
 };
 
-export function VideoPreview({ videoRef, videoUrl, status, converterLoad = null, className = "", ...events }: VideoPreviewProps) {
+export function VideoPreview({ videoRef, videoUrl, status, converterLoad, className = "", ...events }: VideoPreviewProps) {
   const [isMuted, setIsMuted] = useState(false);
   const isReady = status === "ready";
   const message = status === "no-preview" || status === "error" ? MESSAGES[status] : null;
@@ -42,7 +41,6 @@ export function VideoPreview({ videoRef, videoUrl, status, converterLoad = null,
         isReady ? "border border-border" : "border-2 border-dashed border-border"
       }`}
     >
-      {/* screen readers hear loading / can't-preview / unreadable changes */}
       <p role="status" className="sr-only">
         {announcement}
       </p>
@@ -56,10 +54,9 @@ export function VideoPreview({ videoRef, videoUrl, status, converterLoad = null,
       />
 
       {status === "loading" && (
-        // shimmering placeholder where the video will appear
         <div className="skeleton-fill absolute inset-2 flex flex-col items-center justify-center gap-2 sm:inset-4">
           <p className="text-sm text-ink-muted">Loading video…</p>
-          {/* always there (even empty), so the spinner doesn't move when it fills in */}
+          {/* always there, so "Loading video…" doesn't move when this fills in */}
           <p className="min-h-4 text-xs text-ink-muted tabular-nums">
             {converterLoad !== null && (
               <>

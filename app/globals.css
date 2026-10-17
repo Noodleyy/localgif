@@ -1,34 +1,29 @@
 @import "tailwindcss";
 
-/* Purple + near-black palette. Every text/UI pairing used in the app is checked
-   against WCAG 2.2 AA (text 4.5:1, UI parts and focus rings 3:1):
-     ink on primary 5.2 · ink-muted on surfaces/tints ≥ 6.2 · primary vs surface 3.2
-     focus ring vs any background ≥ 9.8 · border-strong (control edges) vs surface 4.2 */
+/* Contrast (WCAG AA needs 4.5 for text, 3 for controls): ink on primary 5.2, ink-muted on
+   surfaces ≥ 6.2, primary vs surface 3.2, focus ring ≥ 9.8, border-strong vs surface 4.2 */
 @theme {
   --color-bg: #0d0b12;
   --color-surface: #17141f;
   --color-surface-alt: #221e2e;
   --color-surface-hover: #2e2940;
-  --color-border: #342e45; /* decorative dividers and panel edges */
-  --color-border-strong: #7d73a0; /* edges that identify a control */
+  --color-border: #342e45; /* decorative */
+  --color-border-strong: #7d73a0; /* control edges */
 
   --color-ink: #f5f3ff;
   --color-ink-muted: #aaa3bf;
 
   --color-primary: #7c3aed;
   --color-primary-hover: #6d28d9;
-  --color-primary-soft: #c4b5fd; /* light purple: focus ring, accents on dark */
+  --color-primary-soft: #c4b5fd;
 
   --color-warning: #fbbf24;
   --color-danger: #fb7185;
 }
 
 html {
-  /* lets CSS transitions run to and from height: auto (the upload box collapsing) */
-  interpolate-size: allow-keywords;
-  /* native controls (sliders, number box, scrollbars) render in their dark variant */
+  interpolate-size: allow-keywords; /* transitions to/from height: auto */
   color-scheme: dark;
-  /* reserve the scrollbar's space so the page doesn't shift sideways when it appears */
   scrollbar-gutter: stable;
 }
 
@@ -38,9 +33,7 @@ body {
 }
 
 @layer base {
-  /* Taps act immediately: no double-tap-to-zoom when stepping frames quickly, and no
-     grey tap flash (the focus ring shows what was hit). In the base layer, so
-     utilities like touch-none on the timeline handles still win. */
+  /* no double-tap zoom when tapping quickly; in the base layer so touch-none still wins */
   button,
   a,
   input,
@@ -51,36 +44,29 @@ body {
   }
 }
 
-/* Below desktop the Convert bar sticks to the bottom of the screen; keep scrolled-to
-   (e.g. keyboard-focused) elements clear of it (WCAG 2.4.11). */
+/* keeps focused elements clear of the sticky Convert bar (WCAG 2.4.11) */
 @media (width < 64rem) {
   html {
     scroll-padding-bottom: 6rem;
   }
 }
 
-/* One clearly visible keyboard focus ring for everything (WCAG 2.4.7 / 1.4.11). */
 :focus-visible {
   outline: 2px solid var(--color-primary-soft);
   outline-offset: 2px;
 }
 
-/* Static purple glow behind the app (no motion, so nothing needs a pause button). */
 .backdrop {
   background:
     radial-gradient(60rem 40rem at 15% -10%, rgb(124 58 237 / 0.28), transparent 70%),
     radial-gradient(50rem 35rem at 100% 110%, rgb(109 40 217 / 0.2), transparent 70%);
 }
 
-/* ---------------------------------------------------------------------------------
-   Loading skeletons (YouTube-style).
-   .skeleton turns a real, fully laid-out card into its own placeholder: every piece
-   of text and every control becomes a soft block in exactly its place, so nothing
-   moves when the real values arrive. The shimmer is one gradient fixed to the
-   screen, so it sweeps across all blocks together.
-   --------------------------------------------------------------------------------- */
+/* .skeleton turns a real, laid-out card into its own placeholder: text and controls become
+   blocks in exactly their place, so nothing moves when the real values arrive. The shimmer
+   gradient is fixed to the screen, so it sweeps across all blocks together. */
 :root {
-  --skeleton: #241f30; /* opaque, so nested blocks don't add up */
+  --skeleton: #241f30; /* opaque: nested blocks mustn't add up */
   --skeleton-shine: #322b43;
 }
 
@@ -94,18 +80,20 @@ body {
 .skeleton :is(svg, img, video) {
   visibility: hidden;
 }
-.skeleton :is(h2, p, label:not(:has(input)), button, input, span:not(:has(*)), [data-skeleton="block"]),
+.skeleton :is(h2, p, label:not(:has(input)), button, input:not([type="range"]), span:not(:has(*)), [data-skeleton="block"]),
 .skeleton-fill,
 .skeleton-inline {
-  background-color: var(--skeleton);
   border-radius: 0.375rem;
+  background: var(--skeleton) linear-gradient(100deg, transparent 45%, var(--skeleton-shine) 50%, transparent 55%) 0 0 / 300vw 100% fixed;
+  animation: shimmer 1.6s linear infinite;
 }
-/* text blocks are as wide as their text, and aligned like it */
 .skeleton :is(h2, p, label:not(:has(input)), span:not(:has(*))) {
   width: fit-content;
   max-width: 100%;
-  /* a little gap between stacked lines, without changing the layout */
   clip-path: inset(2px 0 round 0.375rem);
+}
+.skeleton-inline {
+  color: transparent;
 }
 .skeleton :is(.text-center, .text-center > *) {
   margin-inline: auto;
@@ -113,11 +101,9 @@ body {
 .skeleton .text-right {
   margin-left: auto;
 }
-/* range sliders: just their track (no shimmer: it would move the track itself) */
 .skeleton input[type="range"] {
   appearance: none;
   background: linear-gradient(var(--skeleton), var(--skeleton)) center / 100% 0.5rem no-repeat;
-  animation: none !important;
 }
 .skeleton input[type="range"]::-webkit-slider-thumb {
   opacity: 0;
@@ -125,15 +111,17 @@ body {
 .skeleton input[type="range"]::-moz-range-thumb {
   opacity: 0;
 }
-.skeleton-inline {
-  color: transparent;
-}
 
-/* fade the real content in where the skeleton was */
-@keyframes reveal {
-  from {
-    opacity: 0;
-  }
+.reveal > * {
+  animation: reveal 0.4s ease-out;
+}
+.ping-once {
+  animation: ping-once 0.9s ease-out 0.6s;
+}
+.progress-shine {
+  background-image: linear-gradient(100deg, transparent 35%, rgb(255 255 255 / 0.28) 50%, transparent 65%);
+  background-size: 200% 100%;
+  animation: shine 1.4s linear infinite;
 }
 
 @keyframes shimmer {
@@ -144,8 +132,19 @@ body {
     background-position: -20vw 0;
   }
 }
-
-/* glossy highlight running over a progress bar's filled part */
+@keyframes reveal {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes ping-once {
+  from {
+    box-shadow: 0 0 0 0 rgb(124 58 237 / 0.7);
+  }
+  to {
+    box-shadow: 0 0 0 12px rgb(124 58 237 / 0);
+  }
+}
 @keyframes shine {
   from {
     background-position: 150% 0;
@@ -155,21 +154,13 @@ body {
   }
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  .skeleton :is(h2, p, label:not(:has(input)), button, input, span:not(:has(*)), [data-skeleton="block"]),
-  .skeleton-fill,
-  .skeleton-inline {
-    background-image: linear-gradient(100deg, transparent 45%, var(--skeleton-shine) 50%, transparent 55%);
-    background-size: 300vw 100%;
-    background-attachment: fixed;
-    animation: shimmer 1.6s linear infinite;
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --skeleton-shine: var(--skeleton);
   }
-  .reveal > * {
-    animation: reveal 0.4s ease-out;
-  }
-  .progress-shine {
-    background-image: linear-gradient(100deg, transparent 35%, rgb(255 255 255 / 0.28) 50%, transparent 65%);
-    background-size: 200% 100%;
-    animation: shine 1.4s linear infinite;
+  *,
+  ::before,
+  ::after {
+    animation: none !important;
   }
 }

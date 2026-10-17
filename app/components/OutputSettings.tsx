@@ -1,52 +1,35 @@
 "use client";
 
 import { useState } from "react";
-import { MAX_COLORS, MIN_COLORS } from "../lib/gif";
+import { MAX_COLORS, MAX_GIF_FPS, MIN_COLORS } from "../lib/gif";
 import { clamp } from "../lib/time";
+import { Pending } from "./Pending";
 
 export type Settings = { fps: number; colors: number; scale: number };
 
 type OutputSettingsProps = {
   settings: Settings;
   onChange: (settings: Settings) => void;
-  maxFps: number;
-  /** the video's frame rate (and so maxFps) is still being read */
-  maxFpsLoading?: boolean;
+  maxFps: number | null; // null until the video's frame rate is known
   sourceWidth: number;
 };
 
-// before: = invisible larger hit area around the small buttons, for fingers
+// before: gives the small buttons a bigger, invisible touch area
 const roundButtonClass =
   "relative flex h-8 w-8 before:absolute before:-inset-1.5 items-center sm:h-6 sm:w-6 sm:before:-inset-2 justify-center rounded-full border border-border-strong bg-surface-alt text-ink shadow-sm hover:bg-surface-hover";
 
-export function OutputSettings({ settings, onChange, maxFps, maxFpsLoading = false, sourceWidth }: OutputSettingsProps) {
+export function OutputSettings({ settings, onChange, maxFps, sourceWidth }: OutputSettingsProps) {
+  const fpsLimit = maxFps ?? MAX_GIF_FPS;
   const set = (patch: Partial<Settings>) => onChange({ ...settings, ...patch });
-  const setFps = (fps: number) => set({ fps: clamp(Math.round(fps), 1, maxFps) });
-  // What's being typed into the FPS box, so it can be cleared/retyped without snapping back.
+  const setFps = (fps: number) => set({ fps: clamp(Math.round(fps), 1, fpsLimit) });
+  // what's typed in the FPS box, so it can be cleared and retyped without snapping back
   const [fpsDraft, setFpsDraft] = useState<string | null>(null);
 
-  // Mobile first: one setting per row (name left, value right, control full width).
-  // Tablets: three side by side. Desktop: back to rows, in the narrow sidebar.
   return (
     <div className="grid gap-5 text-sm text-ink-muted tabular-nums sm:grid-cols-[auto_1fr_1fr] sm:gap-6 lg:grid-cols-1 lg:gap-5">
       <div className="flex items-center justify-between gap-3 sm:flex-col sm:items-start sm:justify-start lg:flex-row lg:items-center lg:justify-between">
-        {/* a real <label>, so the box's spoken name matches what's on screen (WCAG 2.5.3) */}
         <label htmlFor="gif-fps" className="text-ink">
-          FPS{" "}
-          <span className="text-ink-muted">
-            (max{" "}
-            {maxFpsLoading ? (
-              <>
-                <span className="skeleton-inline" aria-hidden="true">
-                  00
-                </span>
-                <span className="sr-only">loading</span>
-              </>
-            ) : (
-              maxFps
-            )}
-            )
-          </span>
+          FPS <span className="text-ink-muted">(max {maxFps ?? <Pending placeholder="00" />})</span>
         </label>
         <div className="flex items-center gap-3 sm:gap-2">
           <button
@@ -64,20 +47,20 @@ export function OutputSettings({ settings, onChange, maxFps, maxFpsLoading = fal
             type="number"
             inputMode="numeric"
             min={1}
-            max={maxFps}
+            max={fpsLimit}
             id="gif-fps"
             value={fpsDraft ?? settings.fps}
             onChange={(e) => {
               setFpsDraft(e.target.value);
               const next = Number(e.target.value);
-              if (e.target.value !== "" && next >= 1 && next <= maxFps) setFps(next);
+              if (e.target.value !== "" && next >= 1 && next <= fpsLimit) setFps(next);
             }}
             onBlur={() => {
               if (fpsDraft !== null && fpsDraft !== "" && !Number.isNaN(Number(fpsDraft))) setFps(Number(fpsDraft));
               setFpsDraft(null);
             }}
             onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
-            // 16px text on phones: iOS zooms the page into any smaller input when it's focused
+            // 16px on phones: iOS zooms into any smaller input on focus
             className="h-10 w-14 rounded-lg border border-border-strong bg-surface-alt text-center text-base text-ink sm:h-8 sm:w-12 sm:text-sm [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
           />
           <button

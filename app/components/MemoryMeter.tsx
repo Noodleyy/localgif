@@ -1,10 +1,7 @@
 import type { ConversionRisk } from "../lib/gif";
 
-// Always rendered with the same structure so the layout never shifts: only the
-// colors, the bar width and the numbers change. Lines with changing numbers are
-// single-line (nowrap); the explanation is static text, so it always wraps the same.
-
-// The level is always spelled out in words too, never shown by color alone.
+// Same structure in every state so the layout never shifts. The level is always in
+// words too, never only a color.
 const STYLE = {
   none: { box: "border-border bg-surface-alt/40", bar: "bg-primary", text: "text-ink-muted", label: "Memory OK" },
   moderate: { box: "border-warning/40 bg-warning/10", bar: "bg-warning", text: "text-warning", label: "Close to the limit" },
@@ -27,7 +24,6 @@ export function MemoryMeter({ risk }: { risk: ConversionRisk }) {
   return (
     <div className={`flex flex-col gap-2 rounded-lg border px-4 py-3 transition-colors ${style.box}`}>
       <div className="flex flex-wrap items-baseline justify-between gap-x-3">
-        {/* polite live region: screen readers hear it when the level changes */}
         <span aria-live="polite" className={`text-sm font-medium whitespace-nowrap ${style.text}`}>
           {style.label}
         </span>

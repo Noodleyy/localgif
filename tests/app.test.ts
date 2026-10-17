@@ -1,4 +1,3 @@
-// Small browser-side helpers: remembered settings and the converter download progress.
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { loadSettings, saveSettings } from "../app/lib/settings";
 import { fetchWithProgress } from "../app/lib/ffmpeg";

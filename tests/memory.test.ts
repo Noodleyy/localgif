@@ -1,5 +1,4 @@
-// Checks the out-of-memory estimate against what ffmpeg.wasm really uses.
-// Each case runs on a fresh engine and reads its peak memory (wasm memory never shrinks).
+// Each case runs on a fresh engine; wasm memory never shrinks, so its size is the peak.
 import { beforeAll, describe, expect, it } from "vitest";
 import { convertToGif, estimateConversionRisk } from "../app/lib/gif";
 import { asFFmpeg, loadCore, makeVideo } from "./helpers";

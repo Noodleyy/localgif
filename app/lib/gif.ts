@@ -1,14 +1,13 @@
-// The MP4 -> GIF core. Plain functions, no React, so it can be tested in Node
-// against the same ffmpeg.wasm build the browser uses (see tests/).
+// No React in here, so the tests can run it in Node against the same ffmpeg.wasm build.
 
 export const DEFAULT_FPS = 30;
-export const MIN_COLORS = 4; // ffmpeg's palettegen fails below 4
+export const MIN_COLORS = 4; // palettegen fails below 4
 export const MAX_COLORS = 256;
-// GIF frame delays are whole 1/100 s. Above 50 fps they'd round down to 1/100 s,
-// which browsers treat as "too fast" and replace with 1/10 s — the GIF plays slowly.
+// GIF delays are whole 1/100 s; above 50 fps they round to 1/100 s, which browsers
+// replace with 1/10 s, so the GIF would play slowly.
 export const MAX_GIF_FPS = 50;
 
-/** The subset of @ffmpeg/ffmpeg's FFmpeg class this module needs. */
+/** The part of @ffmpeg/ffmpeg's FFmpeg class used here. */
 export interface FFmpegLike {
   readFile(path: string, encoding?: string): Promise<Uint8Array | string>;
   deleteFile(path: string): Promise<unknown>;
@@ -23,11 +22,11 @@ export interface FFmpegLike {
 }
 
 export type GifOptions = {
-  start: number; // seconds
-  end: number; // seconds
+  start: number;
+  end: number;
   fps: number;
-  colors: number; // clamped to MIN_COLORS..MAX_COLORS
-  width: number; // px; height keeps the aspect ratio
+  colors: number;
+  width: number; // height follows the aspect ratio
 };
 
 export function fileExtension(fileName: string): string {
@@ -37,14 +36,11 @@ export function fileExtension(fileName: string): string {
 
 let mountCount = 0;
 
-/**
- * Lets ffmpeg read `file` straight from disk, a chunk at a time (WORKERFS), instead
- * of copying the whole video into memory first. Each call gets its own folder, so
- * two files probed/converted at the same time can't collide.
- */
+// WORKERFS lets ffmpeg read the file from disk in chunks instead of copying the whole
+// video into memory. A folder per call, so a probe and a conversion can't collide.
 async function withMountedFile<T>(ffmpeg: FFmpegLike, file: File, read: (path: string) => Promise<T>): Promise<T> {
   const dir = `/input${++mountCount}`;
-  const name = `video.${fileExtension(file.name)}`; // our own name: ffmpeg misreads some (e.g. "a:b.mp4")
+  const name = `video.${fileExtension(file.name)}`; // ffmpeg misreads some names, e.g. "a:b.mp4"
   await ffmpeg.createDir(dir);
   try {
     await ffmpeg.mount("WORKERFS", { blobs: [{ name, data: file }] }, dir);
@@ -58,9 +54,8 @@ async function withMountedFile<T>(ffmpeg: FFmpegLike, file: File, read: (path: s
   }
 }
 
-// A showinfo filter before the palette step and one after it each log a line per
-// frame ("[Parsed_showinfo_2 @ 0x…] n:  12 pts: …"). That's the only per-frame signal:
-// ffmpeg's own progress only moves once palettegen has seen every frame.
+// One showinfo line per frame before and after the palette step. ffmpeg's own progress
+// only starts moving once palettegen has seen every frame.
 const FRAME_LOG = /\bn:\s*\d+\s+pts:/;
 
 export function gifArgs(input: string, output: string, o: GifOptions): string[] {
@@ -70,8 +65,7 @@ export function gifArgs(input: string, output: string, o: GifOptions): string[] 
     `fps=${fps},scale=${o.width}:-1:flags=lanczos,showinfo=checksum=0,split[s0][s1];` +
     `[s0]palettegen=max_colors=${colors}[p];[s1][p]paletteuse,showinfo=checksum=0`;
   return [
-    // explicit: the log level is global in ffmpeg.wasm, so an earlier `ffprobe -v error`
-    // would otherwise silence the per-frame lines that drive the progress bar
+    // the log level is global in ffmpeg.wasm: an earlier `ffprobe -v error` would hide the showinfo lines
     "-loglevel", "info",
     "-ss", String(o.start),
     "-t", String(o.end - o.start),
@@ -82,7 +76,6 @@ export function gifArgs(input: string, output: string, o: GifOptions): string[] 
   ];
 }
 
-/** Number of GIF frames a selection produces (roughly; ffmpeg may add one). */
 export function frameCount(o: Pick<GifOptions, "start" | "end" | "fps">) {
   return Math.max(1, Math.ceil((o.end - o.start) * Math.min(o.fps, MAX_GIF_FPS)));
 }
@@ -96,14 +89,11 @@ export async function convertToGif(
   if (!(options.end > options.start)) throw new Error("End time must be after start time");
 
   const output = "output.gif";
-  const totalSteps = frameCount(options) * 2; // each frame passes both showinfo filters
+  const totalSteps = frameCount(options) * 2;
   let steps = 0;
   const logs: string[] = [];
   const onLog = ({ message }: { message: string }) => {
-    if (FRAME_LOG.test(message)) {
-      onProgress?.(Math.min(++steps / totalSteps, 0.99));
-      return;
-    }
+    if (FRAME_LOG.test(message)) return onProgress?.(Math.min(++steps / totalSteps, 0.99));
     logs.push(message);
     if (logs.length > 40) logs.shift();
   };
@@ -129,11 +119,11 @@ export async function convertToGif(
     });
   } finally {
     ffmpeg.off("log", onLog);
-    await ffmpeg.deleteFile(output).catch(() => {}); // free the memory it used
+    await ffmpeg.deleteFile(output).catch(() => {});
   }
 }
 
-/** Parses ffprobe's r_frame_rate, e.g. "30000/1001" or "25". */
+/** ffprobe's r_frame_rate, e.g. "30000/1001" or "25". */
 export function parseFrameRate(text: string): number {
   const [num, den = 1] = text.trim().split("/").map(Number);
   const fps = num / den;
@@ -144,16 +134,12 @@ export type VideoInfo = {
   fps: number;
   width: number;
   height: number;
-  duration: number | null; // null when the file doesn't say (e.g. live-recorded WebM)
+  duration: number | null; // null when the file doesn't say (live-recorded WebM)
 };
 
-/**
- * Reads frame rate, size and duration with ffprobe. Works for formats the
- * browser can't preview (HEVC, AVI, MKV…), so those can still be converted.
- * Throws if the file has no readable video stream.
- */
+/** Also works for formats the browser can't play. Throws if there's no video stream. */
 export async function probeVideo(ffmpeg: FFmpegLike, file: File): Promise<VideoInfo> {
-  const output = `probe${++mountCount}.json`; // unique, like the mount folder
+  const output = `probe${++mountCount}.json`;
   try {
     await withMountedFile(ffmpeg, file, (input) =>
       ffmpeg.ffprobe([
@@ -180,39 +166,27 @@ export async function probeVideo(ffmpeg: FFmpegLike, file: File): Promise<VideoI
   }
 }
 
-/** Highest GIF fps offered: never more than the source has, never more than GIFs can play. */
-export function maxOutputFps(sourceFps: number | null): number {
-  return sourceFps !== null ? Math.min(MAX_GIF_FPS, Math.max(1, Math.round(sourceFps))) : MAX_GIF_FPS;
+export function maxOutputFps(sourceFps: number): number {
+  return Math.min(MAX_GIF_FPS, Math.max(1, Math.round(sourceFps)));
 }
 
-// ---------------------------------------------------------------------------
-// Out-of-memory risk estimate.
-//
-// ffmpeg.wasm's memory is capped at 2 GiB (ffmpeg-core 0.12.10's wasm maximum);
-// going over it is what fails a conversion. The numbers below were fitted to the
-// peak memory of real conversions, and tests/memory.test.ts re-checks them.
-//
-// What it isn't: the input file. ffmpeg reads it from disk a chunk at a time
-// (see withMountedFile), so even a huge file costs no extra memory.
-//
-// What it is: palettegen needs to see *every* frame before paletteuse can start,
-// so every output frame is held in memory (RGBA, 4 bytes/pixel) until the end.
-// Memory therefore grows with  output frames x output width x output height.
-// ---------------------------------------------------------------------------
+// Out-of-memory estimate. ffmpeg.wasm can use at most 2 GiB. palettegen has to see every
+// frame before paletteuse starts, so all output frames stay in memory (RGBA) until the
+// end; the input file doesn't count (WORKERFS). Constants fitted to measured peaks,
+// re-checked by tests/memory.test.ts.
 const MB = 1024 * 1024;
 const MEMORY_LIMIT_MB = 2048;
-const ENGINE_BASE_MB = 32; // memory in use right after ffmpeg.wasm loads
-const DECODER_FRAMES = 4; // source frames the decoder keeps around (YUV 4:2:0 = 1.5 bytes/pixel)
-const BUFFERED_FRAME_OVERHEAD = 1.1; // measured: allocator/alignment overhead on each 4-byte/pixel frame
-const PER_FRAME_MB = 0.1; // measured: fixed cost per buffered frame
-const HIGH = 0.9; // ±10% model error + heap growing in steps -> above this, expect failure
+const ENGINE_BASE_MB = 32;
+const DECODER_FRAMES = 4; // YUV 4:2:0 = 1.5 bytes/pixel
+const BUFFERED_FRAME_OVERHEAD = 1.1;
+const PER_FRAME_MB = 0.1;
+const HIGH = 0.9; // model error ±10% and the heap grows in steps
 const MODERATE = 0.75;
 
 export type ConversionRisk = {
-  clipDuration: number;
   estimatedMB: number;
   limitMB: number;
-  maxSeconds: number; // longest selection that stays under the "high" line at these settings
+  maxSeconds: number; // longest selection that stays under HIGH at these settings
   level: "none" | "moderate" | "high";
 };
 
@@ -224,16 +198,12 @@ export function estimateConversionRisk(p: {
   outputWidth: number;
   outputHeight: number;
 }): ConversionRisk {
-  const clipDuration = Math.max(0, p.clipDuration);
   const fixedMB = ENGINE_BASE_MB + (p.sourceWidth * p.sourceHeight * 1.5 * DECODER_FRAMES) / MB;
   const frameMB = (p.outputWidth * p.outputHeight * 4 * BUFFERED_FRAME_OVERHEAD) / MB + PER_FRAME_MB;
-  const frames = Math.ceil(clipDuration * p.outputFps);
-
+  const frames = Math.ceil(Math.max(0, p.clipDuration) * p.outputFps);
   const estimatedMB = fixedMB + frames * frameMB;
   const ratio = estimatedMB / MEMORY_LIMIT_MB;
-
   return {
-    clipDuration,
     estimatedMB,
     limitMB: MEMORY_LIMIT_MB,
     maxSeconds: Math.max(0, (HIGH * MEMORY_LIMIT_MB - fixedMB) / frameMB / p.outputFps),

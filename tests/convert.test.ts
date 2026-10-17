@@ -1,5 +1,3 @@
-// End-to-end tests of the MP4 -> GIF core, run through the real ffmpeg.wasm engine.
-// Test videos are generated on the fly, so no binary fixtures live in the repo.
 import { readFileSync } from "node:fs";
 import { beforeAll, describe, expect, it } from "vitest";
 import { convertToGif, probeVideo, type GifOptions } from "../app/lib/gif";
@@ -11,38 +9,31 @@ let ffmpeg: Awaited<ReturnType<typeof setup>>["ffmpeg"];
 let videos: Awaited<ReturnType<typeof setup>>["videos"];
 
 async function setup() {
-  // Fixtures are made with a separate engine so the one under test starts clean,
-  // just like a fresh page load.
+  // a separate engine, so the one under test starts clean like on a fresh page
   const gen = await loadCore();
   const videos = {
-    // 64x48, 1 s, 10 fps — about as small as a real video gets
     tiny: await makeVideo(gen, "tiny.mp4", ["-f", "lavfi", "-i", "testsrc=size=64x48:rate=10:duration=1", ...x264]),
-    // 320x240, 2 s, 30 fps, with an audio track (GIFs have no audio; it must be ignored)
+    // with audio, which must be ignored
     small: await makeVideo(gen, "small.mp4", [
       "-f", "lavfi", "-i", "testsrc=size=320x240:rate=30:duration=2",
       "-f", "lavfi", "-i", "sine=frequency=440:duration=2",
       ...x264, "-c:a", "aac", "-shortest",
     ]),
-    // 1 s of solid red then 1 s of solid blue — lets us check *which* part got exported
+    // shows *which* part got exported
     redThenBlue: await makeVideo(gen, "red-then-blue.mp4", [
       "-filter_complex", "color=red:s=64x48:r=10:d=1[a];color=blue:s=64x48:r=10:d=1[b];[a][b]concat=n=2",
       ...x264,
     ]),
-    // 60 fps phone/game footage
     fps60: await makeVideo(gen, "fps60.mp4", ["-f", "lavfi", "-i", "testsrc=size=160x120:rate=60:duration=1", ...x264]),
-    // iPhone-style HEVC, which many browsers can't preview
-    // (ffmpeg.wasm can decode HEVC but not encode it, so this one is a small committed file)
+    // committed: ffmpeg.wasm can decode HEVC but not encode it
     hevc: new File([readFileSync(new URL("./fixtures/hevc-320x240-25fps-2s.mp4", import.meta.url))], "hevc.mp4"),
-    // AVI container (no browser plays it)
     avi: await makeVideo(gen, "clip.avi", ["-f", "lavfi", "-i", "testsrc=size=320x240:rate=25:duration=2", "-c:v", "mpeg4"]),
-    // live-recorded WebM, like a browser screen recording: no duration in the file
+    // like a browser screen recording: no duration in the file
     liveWebm: await makeVideo(gen, "live.webm", ["-f", "lavfi", "-i", "testsrc=size=320x240:rate=30:duration=2", "-c:v", "libvpx", "-deadline", "realtime", "-f", "webm", "-live", "1"]),
-    // phone-style portrait video at NTSC 29.97 fps
     portrait: await makeVideo(gen, "portrait.mp4", ["-f", "lavfi", "-i", "testsrc2=size=360x640:rate=30000/1001:duration=2", ...x264]),
-    // 1080p, 5 s, high bitrate (~18 MB)
     large: await makeVideo(gen, "large.mp4", ["-f", "lavfi", "-i", "testsrc2=size=1920x1080:rate=30:duration=5", ...x264, "-crf", "10"]),
   };
-  // ~180 MB, 50 s of 1080p: the 5 s clip looped 10x without re-encoding.
+  // ~180 MB: the large clip looped 10x without re-encoding
   await gen.FS.writeFile("large.mp4", new Uint8Array(await videos.large.arrayBuffer()));
   const huge = await makeVideo(gen, "huge.mp4", ["-stream_loop", "9", "-i", "large.mp4", "-c", "copy"]);
   gen.FS.unlink("large.mp4");

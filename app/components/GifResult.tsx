@@ -3,34 +3,28 @@
 import { useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 
+type Size = { width: number; height: number };
+export type Gif = Size & { url: string; bytes: number; name: string };
+
 type GifResultProps = {
-  gifUrl: string | null;
-  isConverting: boolean;
-  progress: number | null; // 0..1; null while the converter is still loading
-  loadProgress: number | null; // 0..1 while the converter downloads
+  gif: Gif | null; // shown when not converting
   error: string | null;
-  /** Output size, known before the GIF exists, so the frame can be sized up front. */
-  size: { width: number; height: number };
-  gifBytes: number | null;
-  downloadName: string;
+  isConverting: boolean;
+  progress: number | null; // null while the converter is still loading
+  loadProgress: number | null;
+  convertingSize: Size; // so the frame already has the GIF's shape while converting
   onClose: () => void;
   onCancel: () => void;
 };
 
-// One layout for all three states (converting / ready / failed): a frame with the
-// GIF's aspect ratio, a status line and a button row. Only their contents change,
-// so the dialog never resizes when the conversion finishes.
-// The frame shows the GIF at its real size, shrinking only to fit the screen.
-// 100cqw/100cqh are the overlay's inner size (a container), so scrollbars and
-// mobile browser bars are already accounted for. The constants are the dialog's
-// own chrome: padding + border (width), and that + gaps + status line + button (height).
+// The frame is the GIF's real size, shrunk to fit the screen. 100cqw/100cqh are the
+// overlay's inner size; the constants are the dialog's own padding, status line and button.
 const AVAILABLE_W = "(100cqw - 42px)";
 const AVAILABLE_H = "(100cqh - 128px)";
 
-function frameStyle({ width, height }: { width: number; height: number }): React.CSSProperties {
+function frameStyle({ width, height }: Size): React.CSSProperties {
   return {
     aspectRatio: `${width} / ${height}`,
-    // at least 18rem wide (room for messages), at most the GIF's size or the screen
     width: `max(min(18rem, ${AVAILABLE_W}), min(${width}px, ${AVAILABLE_W}, ${AVAILABLE_H} * ${width / height}))`,
     minHeight: `min(10rem, ${AVAILABLE_H})`,
     maxHeight: AVAILABLE_H,
@@ -42,14 +36,12 @@ function formatBytes(bytes: number) {
   return mb >= 1 ? `${mb.toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`;
 }
 
-export function GifResult({ gifUrl, isConverting, progress, loadProgress, error, size, gifBytes, downloadName, onClose, onCancel }: GifResultProps) {
-  const isReady = gifUrl !== null && !isConverting;
+export function GifResult({ gif, error, isConverting, progress, loadProgress, convertingSize, onClose, onCancel }: GifResultProps) {
   const isFailed = error !== null && !isConverting;
-  const isOpen = isConverting || isReady || isFailed;
+  const ready = !isConverting && !isFailed ? gif : null;
+  const isOpen = isConverting || isFailed || ready !== null;
+  const size = ready ?? convertingSize;
 
-  // Keyboard/screen-reader focus: into the dialog when it opens and onto the button
-  // that matters when it finishes. The page behind is `inert` meanwhile and gets focus
-  // back on close (see page.tsx).
   const dialogRef = useRef<HTMLDivElement>(null);
   const downloadRef = useRef<HTMLAnchorElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
@@ -58,7 +50,6 @@ export function GifResult({ gifUrl, isConverting, progress, loadProgress, error,
     if (isOpen) dialogRef.current?.focus();
   }, [isOpen]);
 
-  // Tab / Shift+Tab wrap around inside the dialog instead of leaving it.
   function trapTab(e: React.KeyboardEvent) {
     if (e.key !== "Tab") return;
     const focusable = [...(dialogRef.current?.querySelectorAll<HTMLElement>("a[href], button:not(:disabled)") ?? [])];
@@ -75,11 +66,10 @@ export function GifResult({ gifUrl, isConverting, progress, loadProgress, error,
   }
 
   useEffect(() => {
-    if (isReady) downloadRef.current?.focus();
+    if (ready) downloadRef.current?.focus();
     if (isFailed) closeRef.current?.focus();
-  }, [isReady, isFailed]);
+  }, [ready, isFailed]);
 
-  // Escape closes the dialog, or cancels a conversion that's still running.
   useEffect(() => {
     if (!isOpen) return;
     function onKeyDown(e: KeyboardEvent) {
@@ -89,7 +79,6 @@ export function GifResult({ gifUrl, isConverting, progress, loadProgress, error,
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [isOpen, isConverting, onClose, onCancel]);
 
-  // the bar shows the converter's download first, then the conversion
   const loading = progress === null;
   const barValue = loading ? loadProgress : progress;
 
@@ -125,26 +114,23 @@ export function GifResult({ gifUrl, isConverting, progress, loadProgress, error,
             aria-label={isConverting ? "Converting to GIF" : isFailed ? "Conversion failed" : "GIF ready"}
             className="relative rounded-xl border border-border bg-surface shadow-2xl"
           >
-            <button
-              onClick={onClose}
-              disabled={isConverting}
-              aria-label="Close"
-              className={`absolute -top-3 -right-3 flex h-7 w-7 before:absolute before:-inset-2 items-center justify-center rounded-full border border-border bg-surface text-ink-muted shadow-md transition-opacity hover:bg-surface-alt hover:text-ink ${
-                isConverting ? "pointer-events-none opacity-0" : ""
-              }`}
-            >
-              ✕
-            </button>
+            {!isConverting && (
+              <button
+                onClick={onClose}
+                aria-label="Close"
+                className="absolute -top-3 -right-3 flex h-7 w-7 before:absolute before:-inset-2 items-center justify-center rounded-full border border-border bg-surface text-ink-muted shadow-md hover:bg-surface-alt hover:text-ink"
+              >
+                ✕
+              </button>
+            )}
 
             <div className="flex flex-col items-center gap-3 p-5 text-center">
-              {/* frame: same box for spinner, GIF and error */}
               <div
                 className={`relative flex items-center justify-center overflow-hidden rounded-lg ${isConverting ? "skeleton-fill" : ""}`}
                 style={frameStyle(size)}
               >
                 {isConverting && (
                   <>
-                    {/* shimmering placeholder where the GIF will appear */}
                     <svg
                       viewBox="0 0 24 24"
                       fill="none"
@@ -159,7 +145,6 @@ export function GifResult({ gifUrl, isConverting, progress, loadProgress, error,
                         d="m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 0 0 1.5-1.5V6a1.5 1.5 0 0 0-1.5-1.5H3.75A1.5 1.5 0 0 0 2.25 6v12a1.5 1.5 0 0 0 1.5 1.5Zm10.5-11.25h.008v.008h-.008V8.25Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z"
                       />
                     </svg>
-                    {/* pinned to the frame's bottom edge, so it takes no layout space */}
                     <div
                       role="progressbar"
                       aria-label={loading ? "Loading converter" : "Conversion progress"}
@@ -175,9 +160,7 @@ export function GifResult({ gifUrl, isConverting, progress, loadProgress, error,
                     </div>
                   </>
                 )}
-                {isReady && (
-                  <motion.img {...pop} src={gifUrl} alt="GIF preview" className="h-full w-full object-scale-down" />
-                )}
+                {ready && <motion.img {...pop} src={ready.url} alt="GIF preview" className="h-full w-full object-scale-down" />}
                 {isFailed && (
                   <motion.div {...pop} className="flex max-h-full flex-col items-center gap-2 overflow-auto px-2">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-10 w-10 shrink-0 text-danger">
@@ -192,18 +175,15 @@ export function GifResult({ gifUrl, isConverting, progress, loadProgress, error,
                 )}
               </div>
 
-              {/* screen readers hear the outcome (the % ticks aren't announced, that would be noise) */}
+              {/* the outcome for screen readers; the percentages would only be noise */}
               <p role="status" className="sr-only">
                 {isConverting
                   ? "Converting to GIF"
-                  : isReady
-                    ? `GIF ready, ${size.width} by ${size.height} pixels. Download GIF is focused.`
-                    : isFailed
-                      ? `Conversion failed. ${error}`
-                      : ""}
+                  : isFailed
+                    ? `Conversion failed. ${error}`
+                    : `GIF ready, ${size.width} by ${size.height} pixels. Download GIF is focused.`}
               </p>
 
-              {/* status line (min-h, not h: survives larger user text spacing, WCAG 1.4.12) */}
               <div className="flex min-h-6 flex-wrap items-center justify-center gap-2 text-sm font-medium text-ink">
                 {isConverting && (
                   <span className="font-normal text-ink-muted tabular-nums">
@@ -214,7 +194,7 @@ export function GifResult({ gifUrl, isConverting, progress, loadProgress, error,
                   </span>
                 )}
                 {isFailed && <span>Conversion failed</span>}
-                {isReady && (
+                {ready && (
                   <>
                     <motion.svg
                       viewBox="0 0 24 24"
@@ -243,15 +223,13 @@ export function GifResult({ gifUrl, isConverting, progress, loadProgress, error,
                     <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3, delay: 0.55 }}>
                       GIF ready
                       <span className="font-normal text-ink-muted tabular-nums">
-                        {" "}· {size.width}×{size.height}
-                        {gifBytes !== null && ` · ${formatBytes(gifBytes)}`}
+                        {" "}· {size.width}×{size.height} · {formatBytes(ready.bytes)}
                       </span>
                     </motion.span>
                   </>
                 )}
               </div>
 
-              {/* button row: one button of the same size in every state */}
               {isConverting ? (
                 <button
                   onClick={onCancel}
@@ -268,22 +246,14 @@ export function GifResult({ gifUrl, isConverting, progress, loadProgress, error,
                   Close
                 </button>
               ) : (
-                <motion.a
+                <a
                   ref={downloadRef}
-                  whileHover={isReady ? { scale: 1.03 } : undefined}
-                  // one soft purple pulse when the GIF is ready, to draw the eye to Download
-                  animate={isReady ? { boxShadow: ["0 0 0 0px rgb(124 58 237 / 0.7)", "0 0 0 12px rgb(124 58 237 / 0)"] } : undefined}
-                  transition={{ boxShadow: { duration: 0.9, delay: 0.6, ease: "easeOut" } }}
-                  whileTap={isReady ? { scale: 0.97 } : undefined}
-                  href={gifUrl ?? undefined}
-                  download={downloadName}
-                  aria-disabled={!isReady}
-                  className={`w-36 rounded-lg border border-transparent bg-primary px-4 py-2 text-sm font-medium text-ink transition-[background-color,opacity] hover:bg-primary-hover ${
-                    isReady ? "" : "pointer-events-none opacity-40"
-                  }`}
+                  href={ready?.url}
+                  download={ready?.name}
+                  className="ping-once w-36 rounded-lg border border-transparent bg-primary px-4 py-2 text-sm font-medium text-ink transition-[background-color,scale] hover:bg-primary-hover motion-safe:hover:scale-[1.03] motion-safe:active:scale-[0.97]"
                 >
                   Download GIF
-                </motion.a>
+                </a>
               )}
             </div>
           </motion.div>

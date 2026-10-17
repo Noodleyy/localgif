@@ -1,5 +1,4 @@
-// Test helpers: run the *same* ffmpeg.wasm core the browser loads (@ffmpeg/core,
-// pinned to the version in app/lib/ffmpeg.ts) inside Node, and parse GIF output.
+// Runs the same ffmpeg.wasm core the browser loads, in Node, and parses GIF output.
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import type { FFmpegLike } from "../app/lib/gif";
@@ -26,10 +25,9 @@ type Core = {
   };
 };
 
-/** Loads a fresh ffmpeg.wasm instance (same 2 GiB heap limit as in the browser). */
 export type { Core };
 export async function loadCore(): Promise<Core> {
-  // The core is built for web workers; give it the bits of `self` it expects.
+  // built for web workers
   (globalThis as { self?: unknown }).self ??= { location: { href: "file:///" } };
   const createCore = require("@ffmpeg/core");
   const wasmBinary = readFileSync(require.resolve("@ffmpeg/core/wasm"));
@@ -53,9 +51,8 @@ export function asFFmpeg(core: Core): FFmpegLike & { files(): string[] } {
     deleteFile: async (path) => core.FS.unlink(path),
     createDir: async (path) => core.FS.mkdir(path),
     deleteDir: async (path) => core.FS.rmdir(path),
-    // Uses emscripten's real WORKERFS, exactly like the browser. Only the byte source
-    // differs: browsers read File slices with FileReaderSync (worker-only), so we hand
-    // WORKERFS blobs whose slices are already in memory.
+    // emscripten's real WORKERFS, like the browser; only the bytes come from memory
+    // because FileReaderSync only exists in workers
     mount: async (fsType, { blobs }, mountPoint) => {
       const inMemory = await Promise.all(
         blobs.map(async ({ name, data }) => ({ name, data: syncBlob(new Uint8Array(await data.arrayBuffer())) }))
@@ -119,7 +116,6 @@ export function parseGif(bytes: Uint8Array): GifInfo {
   const info: GifInfo = { width: u16(6), height: u16(8), frames: 0, durationSec: 0, minDelayCs: Infinity, loopsForever: false, maxColors: 0, palette: [] };
   const allColors = new Set<number>();
 
-  // Collects the distinct RGB entries of the color table at `pos`, then skips past it.
   const readTable = (size: number) => {
     const colors = new Set<number>();
     for (let i = 0; i < size; i++, pos += 3) colors.add((bytes[pos] << 16) | (bytes[pos + 1] << 8) | bytes[pos + 2]);

@@ -6,8 +6,7 @@ export const metadata: Metadata = {
   description: "Turn a video into a GIF right in your browser. Nothing is uploaded.",
 };
 
-// viewportFit "cover" lets the sticky Convert bar extend under the iPhone home indicator
-// (it pads itself with env(safe-area-inset-bottom)). Zooming stays allowed (WCAG 1.4.4).
+// "cover": the Convert bar extends under the iPhone home indicator (it pads itself with safe-area-inset)
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,

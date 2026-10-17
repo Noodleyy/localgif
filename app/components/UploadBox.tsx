@@ -13,14 +13,7 @@ type UploadBoxProps = {
   file: File | null;
 };
 
-const uploadIcon =
-  "M3 16.5v1.5A2.25 2.25 0 0 0 5.25 20.25h13.5A2.25 2.25 0 0 0 21 18v-1.5M7.5 9.75 12 5.25m0 0 4.5 4.5M12 5.25v10.5";
-
-/**
- * Before a file is picked: a big drop zone. After: a compact one-row bar (on every
- * screen size) so the video and controls get the space. Both open the file picker
- * on click/Enter/Space and accept a dropped file.
- */
+/** A big drop zone until a file is picked, then a compact bar. */
 export function UploadBox({ onFileSelect, file }: UploadBoxProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -32,27 +25,20 @@ export function UploadBox({ onFileSelect, file }: UploadBoxProps) {
     if (picked) onFileSelect(picked);
   }
 
-  // bg-surface-alt (used while dragging) only clears WCAG AA against text-ink, not text-ink-muted
+  // bg-surface-alt (while dragging) only has enough contrast with text-ink, not text-ink-muted
   const mutedTextClass = isDragging ? "text-ink" : "text-ink-muted";
-  const surface = isDragging
-    ? "border-primary-soft bg-surface-alt"
-    : "border-border-strong bg-surface hover:border-primary-soft";
 
   return (
     <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4, delay: 0.1 }}
       role="button"
       tabIndex={0}
-      // fades in with the page; the icon lifts on hover and while a file is dragged over
-      initial={{ opacity: 0, y: 8 }}
-      variants={{ rest: { opacity: 1, y: 0, scale: 1 }, drag: { opacity: 1, y: 0, scale: 1.01 }, hover: {} }}
-      animate={isDragging ? "drag" : "rest"}
-      whileHover="hover"
-      whileTap={{ scale: 0.99 }}
-      transition={{ type: "spring", stiffness: 300, damping: 22, opacity: { duration: 0.4, delay: 0.1 } }}
       onClick={() => inputRef.current?.click()}
       onKeyDown={(e) => {
         if (e.key !== "Enter" && e.key !== " ") return;
-        e.preventDefault(); // Space would otherwise also scroll the page
+        e.preventDefault();
         inputRef.current?.click();
       }}
       onDragOver={(e) => {
@@ -60,31 +46,25 @@ export function UploadBox({ onFileSelect, file }: UploadBoxProps) {
         setIsDragging(true);
       }}
       onDragLeave={(e) => {
-        // dragleave also fires when moving over the box's own text/icon; ignore those
+        // also fires when moving over the box's own children
         if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setIsDragging(false);
       }}
       onDrop={handleDrop}
-      // Picking a file shrinks the drop zone into a bar. The height eases between the two
-      // (CSS can transition to/from height:auto thanks to interpolate-size in globals.css;
-      // browsers without it just switch).
-      className={`w-full cursor-pointer overflow-hidden rounded-xl border-2 border-dashed transition-[height,padding,border-color,background-color] duration-300 ease-out motion-reduce:transition-colors ${surface} ${
-        file
-          ? "flex items-center gap-3 px-4 py-3"
-          : "flex h-56 flex-col items-center justify-center gap-3 p-6 text-center sm:h-72 lg:h-80"
-      }`}
+      // the height eases between drop zone and bar thanks to interpolate-size (globals.css)
+      className={`group w-full cursor-pointer overflow-hidden rounded-xl border-2 border-dashed transition-[height,padding,border-color,background-color,scale] duration-300 ease-out motion-reduce:transition-colors motion-safe:active:scale-[0.99] ${
+        isDragging ? "border-primary-soft bg-surface-alt motion-safe:scale-[1.01]" : "border-border-strong bg-surface hover:border-primary-soft"
+      } ${file ? "flex items-center gap-3 px-4 py-3" : "flex h-56 flex-col items-center justify-center gap-3 p-6 text-center sm:h-72 lg:h-80"}`}
     >
-      <motion.svg
+      <svg
         viewBox="0 0 24 24"
         fill="none"
         stroke="currentColor"
         strokeWidth={1.5}
         aria-hidden="true"
-        className={`shrink-0 ${file ? "h-6 w-6" : "h-8 w-8"} ${mutedTextClass}`}
-        variants={{ rest: { y: 0 }, drag: { y: -3 }, hover: { y: -3 } }}
-        transition={{ type: "spring", stiffness: 300, damping: 15 }}
+        className={`shrink-0 transition-transform motion-safe:group-hover:-translate-y-0.5 ${isDragging ? "motion-safe:-translate-y-1" : ""} ${file ? "h-6 w-6" : "h-8 w-8"} ${mutedTextClass}`}
       >
-        <path strokeLinecap="round" strokeLinejoin="round" d={uploadIcon} />
-      </motion.svg>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v1.5A2.25 2.25 0 0 0 5.25 20.25h13.5A2.25 2.25 0 0 0 21 18v-1.5M7.5 9.75 12 5.25m0 0 4.5 4.5M12 5.25v10.5" />
+      </svg>
 
       {file ? (
         <>
@@ -92,14 +72,11 @@ export function UploadBox({ onFileSelect, file }: UploadBoxProps) {
             <p className="truncate text-sm font-medium text-ink">{file.name}</p>
             <p className={`text-xs tabular-nums ${mutedTextClass}`}>{formatBytes(file.size)}</p>
           </div>
-          <span className="shrink-0 rounded-lg border border-border-strong px-3 py-1.5 text-sm font-medium text-ink">
-            Change
-          </span>
+          <span className="shrink-0 rounded-lg border border-border-strong px-3 py-1.5 text-sm font-medium text-ink">Change</span>
         </>
       ) : (
         <div>
           <p className="text-lg font-medium text-ink">Choose a video</p>
-          {/* phones can't drag files, so only mention dropping where there's a mouse */}
           <p className={`text-sm pointer-coarse:hidden ${mutedTextClass}`}>or drop it here</p>
           <p className={`mt-1 text-xs ${mutedTextClass}`}>MP4, MOV, WebM, AVI, MKV… · stays on your device</p>
         </div>

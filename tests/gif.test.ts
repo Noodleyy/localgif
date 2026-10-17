@@ -1,4 +1,3 @@
-// Fast unit tests for the pure helpers (no ffmpeg needed).
 import { describe, expect, it } from "vitest";
 import { estimateConversionRisk, fileExtension, frameCount, gifArgs, maxOutputFps, parseFrameRate } from "../app/lib/gif";
 import { formatTimecode, stepFrame } from "../app/lib/time";
@@ -63,7 +62,6 @@ describe("maxOutputFps", () => {
     expect(maxOutputFps(29.97)).toBe(30);
     expect(maxOutputFps(0.2)).toBe(1);
     expect(maxOutputFps(60)).toBe(50);
-    expect(maxOutputFps(null)).toBe(50);
   });
 });
 
@@ -119,7 +117,7 @@ describe("estimateConversionRisk", () => {
   });
 
   it("negative clip length counts as zero", () => {
-    expect(risk({ clipDuration: -3 })).toMatchObject({ clipDuration: 0, level: "none" });
+    expect(risk({ clipDuration: -3 })).toEqual(risk({ clipDuration: 0 }));
   });
 });
 

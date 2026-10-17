@@ -124,8 +124,9 @@ Phone layout is the default; `sm:` (≥640px) and `lg:` (≥1024px) classes only
 - The drop zone eases into the compact file bar (a CSS height transition, using `interpolate-size`).
 - Small touches: page entrance, icon lift on hover/drag, button hover/press, a gloss on the progress
   bar, one pulse on Download when the GIF is ready.
-- **Reduce motion** (OS setting): CSS shimmer/gloss only run under `prefers-reduced-motion: no-preference`,
-  and framer-motion skips movement (`MotionConfig reducedMotion="user"`), keeping only short fades.
+- framer-motion only for things appearing and disappearing (dialog, fade-ins); hover/press effects are CSS.
+- **Reduce motion** (OS setting): one rule in `globals.css` switches off all CSS animation, and
+  framer-motion skips movement (`MotionConfig reducedMotion="user"`), keeping only short fades.
   Nothing keeps animating once the page is idle (WCAG 2.2.2).
 
 ## Accessibility (WCAG 2.2 AA)
@@ -138,7 +139,7 @@ dialog converting/ready/failed, phone width) plus manual checks. Things to keep 
   meter always says "Memory OK / Close to the limit / Likely to run out").
 - **Focus**: one global `:focus-visible` ring (light purple). Don't add `outline-none`.
 - **Dialog**: focus moves in on open, Tab wraps inside, the page behind is `inert`, focus returns to
-  the button that opened it (Convert or View GIF) on close. Escape closes it, or cancels a running conversion.
+  Convert on close. Escape closes it, or cancels a running conversion.
 - **Announcements**: `role="status"` / `aria-live` for video loading state, memory level and the
   conversion outcome.
 - **No auto-playing motion** (the background is static); framer animations respect "reduce motion".
