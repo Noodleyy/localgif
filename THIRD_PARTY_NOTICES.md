@@ -27,7 +27,7 @@ Author: Jerome Wu. Source: https://github.com/ffmpegwasm/ffmpeg.wasm
 
 ## Bundled JavaScript libraries — MIT
 
-- Next.js 16.2.12 — Copyright (c) 2025 Vercel, Inc.
+- Next.js 16.3.8 — Copyright (c) 2025 Vercel, Inc.
 - React 19.2.4 / React DOM — Copyright (c) Meta Platforms, Inc. and affiliates.
 - Framer Motion 13.0.0 — Copyright (c) 2018 Framer B.V.
 

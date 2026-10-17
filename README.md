@@ -28,6 +28,8 @@ Notes:
   sub-path build locally: `BASE_PATH=/<repo> npm run build`, then serve `out/` under `/<repo>/`.
 - No special server headers are needed (GitHub Pages can't set them anyway): the single-threaded
   ffmpeg.wasm core doesn't need cross-origin isolation.
+- Next.js is pinned to 16.3.x: from 16.4 Turbopack fails the build on the dynamic
+  `new Worker(new URL(...))` inside `@ffmpeg/ffmpeg` ("Module not found: Can't resolve <dynamic>").
 - The converter (`@ffmpeg/core`, ~31 MB) is copied from `node_modules` into `public/ffmpeg/core/` by
   `scripts/copy-ffmpeg-core.mjs` before every `dev`/`build`, and served by the site itself — no CDN.
   It's git-ignored; to update it, bump `@ffmpeg/core` in `package.json` (the tests use the same copy).
