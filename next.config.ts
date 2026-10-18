@@ -10,7 +10,6 @@ const nextConfig: NextConfig = {
   output: "export",
   basePath,
   trailingSlash: true, // Pages serves /<repo>/ from /<repo>/index.html
-  images: { unoptimized: true },
   env: {
     NEXT_PUBLIC_BASE_PATH: basePath,
     NEXT_PUBLIC_REPO_URL: process.env.REPO_URL ?? "",

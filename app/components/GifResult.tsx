@@ -19,6 +19,9 @@ type GifResultProps = {
 
 // The frame is the GIF's real size, shrunk to fit the screen. 100cqw/100cqh are the
 // overlay's inner size; the constants are the dialog's own padding, status line and button.
+const secondaryButton =
+  "w-36 rounded-lg border border-border-strong bg-surface-alt px-4 py-2 text-sm font-medium text-ink transition-colors hover:bg-surface-hover";
+
 const AVAILABLE_W = "(100cqw - 42px)";
 const AVAILABLE_H = "(100cqh - 128px)";
 
@@ -233,7 +236,7 @@ export function GifResult({ gif, error, isConverting, progress, loadProgress, co
               {isConverting ? (
                 <button
                   onClick={onCancel}
-                  className="w-36 rounded-lg border border-border-strong bg-surface-alt px-4 py-2 text-sm font-medium text-ink transition-colors hover:bg-surface-hover"
+                  className={secondaryButton}
                 >
                   Cancel
                 </button>
@@ -241,7 +244,7 @@ export function GifResult({ gif, error, isConverting, progress, loadProgress, co
                 <button
                   ref={closeRef}
                   onClick={onClose}
-                  className="w-36 rounded-lg border border-border-strong bg-surface-alt px-4 py-2 text-sm font-medium text-ink transition-colors hover:bg-surface-hover"
+                  className={secondaryButton}
                 >
                   Close
                 </button>

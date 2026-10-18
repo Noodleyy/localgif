@@ -25,7 +25,6 @@ type Core = {
   };
 };
 
-export type { Core };
 export async function loadCore(): Promise<Core> {
   // built for web workers
   (globalThis as { self?: unknown }).self ??= { location: { href: "file:///" } };
@@ -95,7 +94,7 @@ export async function makeVideo(core: Core, name: string, ffmpegArgs: string[]):
   return new File([bytes as Uint8Array<ArrayBuffer>], name, { type: "video/mp4" });
 }
 
-export type GifInfo = {
+type GifInfo = {
   width: number;
   height: number;
   frames: number;

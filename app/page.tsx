@@ -2,8 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { MotionConfig, motion } from "framer-motion";
-import { getFFmpeg, onConverterLoad, resetFFmpeg } from "./lib/ffmpeg";
-import { convertToGif, estimateConversionRisk, maxOutputFps, probeVideo, DEFAULT_FPS, type VideoInfo } from "./lib/gif";
+import { getFFmpeg } from "./lib/ffmpeg";
+import { estimateConversionRisk, maxOutputFps, probeVideo, DEFAULT_FPS, type VideoInfo } from "./lib/gif";
 import { clamp, stepFrame } from "./lib/time";
 import { loadSettings, saveSettings } from "./lib/settings";
 import { UploadBox } from "./components/UploadBox";
@@ -11,7 +11,9 @@ import { VideoPreview, type VideoStatus } from "./components/VideoPreview";
 import { ClipControls } from "./components/ClipControls";
 import { OutputSettings, type Settings } from "./components/OutputSettings";
 import { MemoryMeter } from "./components/MemoryMeter";
-import { GifResult, type Gif } from "./components/GifResult";
+import { GifResult } from "./components/GifResult";
+import { Footer } from "./components/Footer";
+import { useConversion } from "./useConversion";
 
 type VideoMeta = { duration: number; width: number; height: number };
 
@@ -52,19 +54,10 @@ export default function Page() {
 
   // read during hydration on purpose: the settings aren't in the HTML until a video is loaded
   const [settings, setSettings] = useState<Settings>(() => ({ fps: 10, colors: 256, ...loadSettings(), scale: 1 }));
-  const [isConverting, setIsConverting] = useState(false);
-  const [progress, setProgress] = useState<number | null>(null);
-  const [converterLoad, setConverterLoad] = useState<number | null>(null);
-  const [gif, setGif] = useState<Gif | null>(null); // kept after the dialog closes ("View GIF")
-  const [showResult, setShowResult] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  // cancelling bumps the run number, so the cancelled run knows to stop
-  const runRef = useRef(0);
-  const phaseRef = useRef<"loading" | "converting">("loading");
+  const conversion = useConversion();
 
-  useEffect(() => onConverterLoad(setConverterLoad), []);
-
-  const fps = sourceFps ?? DEFAULT_FPS;
+  // frame-by-frame steps follow the video's own frame rate
+  const stepFps = sourceFps ?? DEFAULT_FPS;
 
   function handleFileSelect(newFile: File) {
     if (videoUrl) URL.revokeObjectURL(videoUrl);
@@ -75,8 +68,8 @@ export default function Page() {
     setCurrentTime(0);
     setIsPlaying(false);
     setSettings((s) => ({ ...s, scale: 1 }));
-    closeResult();
-    discardGif();
+    conversion.close();
+    conversion.discard();
 
     const probe = { file: newFile, info: getFFmpeg().then((ffmpeg) => probeVideo(ffmpeg, newFile)) };
     probeRef.current = probe;
@@ -169,15 +162,15 @@ export default function Page() {
   function stepPreview(direction: 1 | -1) {
     const video = videoRef.current;
     if (!video || !meta) return;
-    showFrame(stepFrame(video.currentTime, direction, fps, 0, meta.duration));
+    showFrame(stepFrame(video.currentTime, direction, stepFps, 0, meta.duration));
   }
 
   function nudgeTrim(edge: "start" | "end", direction: 1 | -1) {
     if (!meta) return;
     const time =
       edge === "start"
-        ? stepFrame(trim.start, direction, fps, 0, trim.end)
-        : stepFrame(trim.end, direction, fps, trim.start, meta.duration);
+        ? stepFrame(trim.start, direction, stepFps, 0, trim.end)
+        : stepFrame(trim.end, direction, stepFps, trim.start, meta.duration);
     setTrim((t) => ({ ...t, [edge]: time }));
     showFrame(time);
   }
@@ -189,66 +182,13 @@ export default function Page() {
     saveSettings(next);
   }
 
-  async function handleConvert() {
+  function handleConvert() {
     if (!file || !meta || !canConvert) return;
-    const run = ++runRef.current;
-    const isCancelled = () => runRef.current !== run;
-    phaseRef.current = "loading";
-    discardGif();
-    setError(null);
-    setShowResult(true);
-    setIsConverting(true);
-    setProgress(null);
-    const size = outputSize;
-    const name = `${file.name.replace(/\.[^.]+$/, "") || "output"}.gif`;
-    try {
-      const ffmpeg = await getFFmpeg();
-      if (isCancelled()) return;
-      phaseRef.current = "converting";
-      setProgress(0);
-      const options = {
-        start: trim.start,
-        end: trim.end,
-        fps: settings.fps,
-        colors: settings.colors,
-        width: Math.round(meta.width * settings.scale),
-      };
-      // whole percents, so React can skip most updates
-      const data = await convertToGif(ffmpeg, file, options, (p) => {
-        if (!isCancelled()) setProgress(Math.floor(p * 100) / 100);
-      });
-      const url = URL.createObjectURL(new Blob([data as Uint8Array<ArrayBuffer>], { type: "image/gif" }));
-      if (isCancelled()) return URL.revokeObjectURL(url);
-      setGif({ url, bytes: data.byteLength, ...size, name });
-    } catch (err) {
-      if (isCancelled()) return;
-      setError(err instanceof Error ? err.message : String(err));
-      resetFFmpeg(); // a crashed (e.g. out of memory) instance can't be reused
-    } finally {
-      if (!isCancelled()) setIsConverting(false);
-    }
+    const { fps, colors, scale } = settings;
+    conversion.convert(file, { start: trim.start, end: trim.end, fps, colors, width: Math.round(meta.width * scale) }, outputSize);
   }
 
-  function cancelConversion() {
-    runRef.current++;
-    // Only killing the worker stops ffmpeg. A download in progress may finish: it's needed anyway.
-    if (phaseRef.current === "converting") resetFFmpeg();
-    setIsConverting(false);
-    setShowResult(false);
-  }
-
-  function closeResult() {
-    setShowResult(false);
-    setError(null);
-  }
-
-  function discardGif() {
-    // after the dialog's exit animation is done with it
-    if (gif) setTimeout(() => URL.revokeObjectURL(gif.url), 1000);
-    setGif(null);
-  }
-
-  const dialogOpen = isConverting || (showResult && (gif !== null || error !== null));
+  const { dialogOpen, isConverting, gif } = conversion;
 
   // the page behind the dialog is inert, so focus needs a place to go back to
   const wasOpenRef = useRef(false);
@@ -311,7 +251,7 @@ export default function Page() {
                 videoRef={videoRef}
                 videoUrl={videoUrl}
                 status={videoStatus}
-                converterLoad={converterLoad}
+                converterLoad={conversion.converterLoad}
                 className="aspect-video w-full lg:max-h-[65vh]"
                 onLoadedMetadata={handleLoadedMetadata}
                 onError={handleVideoError}
@@ -378,7 +318,7 @@ export default function Page() {
                 </button>
                 {gif && !isConverting && (
                   <button
-                    onClick={() => setShowResult(true)}
+                    onClick={conversion.reopen}
                     className={`shrink-0 rounded-lg border border-border-strong bg-surface-alt px-4 py-3 font-medium text-ink hover:bg-surface-hover lg:py-2.5 ${lift}`}
                   >
                     View GIF
@@ -390,49 +330,18 @@ export default function Page() {
         )}
       </div>
 
-      {/* the GPL asks to say what the app is built on and where its source is */}
-      <motion.footer
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ duration: 0.5, delay: 0.25 }}
-        className="pt-2 pb-8 text-center text-xs leading-relaxed text-ink-muted"
-      >
-        <p>Runs entirely in your browser — your video never leaves your device.</p>
-        <p>
-          Converts with{" "}
-          <a href="https://ffmpeg.org" className="text-ink underline underline-offset-2">
-            FFmpeg
-          </a>{" "}
-          via{" "}
-          <a href="https://github.com/ffmpegwasm/ffmpeg.wasm" className="text-ink underline underline-offset-2">
-            ffmpeg.wasm
-          </a>{" "}
-          (GPL). This app is free software under the{" "}
-          <a href="https://www.gnu.org/licenses/gpl-3.0.html" className="text-ink underline underline-offset-2">
-            GPL-3.0
-          </a>
-          {process.env.NEXT_PUBLIC_REPO_URL && (
-            <>
-              {" · "}
-              <a href={process.env.NEXT_PUBLIC_REPO_URL} className="text-ink underline underline-offset-2">
-                Source code
-              </a>
-            </>
-          )}
-          .
-        </p>
-      </motion.footer>
+      <Footer />
     </main>
 
       <GifResult
-        gif={showResult ? gif : null}
-        error={showResult ? error : null}
+        gif={conversion.showResult ? gif : null}
+        error={conversion.showResult ? conversion.error : null}
         isConverting={isConverting}
-        progress={progress}
-        loadProgress={converterLoad}
+        progress={conversion.progress}
+        loadProgress={conversion.converterLoad}
         convertingSize={outputSize}
-        onClose={closeResult}
-        onCancel={cancelConversion}
+        onClose={conversion.close}
+        onCancel={conversion.cancel}
       />
     </MotionConfig>
   );

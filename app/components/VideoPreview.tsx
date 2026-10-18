@@ -44,6 +44,7 @@ export function VideoPreview({ videoRef, videoUrl, status, converterLoad, classN
       <p role="status" className="sr-only">
         {announcement}
       </p>
+      {/* eslint-disable-next-line jsx-a11y-x/media-has-caption -- a preview of the user's own file: no captions exist */}
       <video
         ref={videoRef}
         src={videoUrl}
