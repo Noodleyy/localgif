@@ -1,6 +1,6 @@
 # Third-party software
 
-nobsvideo2gif is free software under the GNU General Public License v3.0 or later
+localgif is free software under the GNU General Public License v3.0 or later
 (see `LICENSE`). The deployed site includes the following third-party software.
 
 ## FFmpeg, via ffmpeg.wasm (`@ffmpeg/core` 0.12.10) — GPL-2.0-or-later

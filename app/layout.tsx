@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "nobsvideo2gif",
+  title: "localgif",
   description: "Turn a video into a GIF right in your browser. Nothing is uploaded.",
 };
 

@@ -1,4 +1,4 @@
-# nobsvideo2gif
+# localgif
 
 Convert a video (MP4, MOV, WebM, HEVC, AVI, MKV…) to a GIF entirely in the browser with [ffmpeg.wasm](https://github.com/ffmpegwasm/ffmpeg.wasm). Nothing is uploaded, and nothing is loaded from other sites: the converter is served by the site itself.
 

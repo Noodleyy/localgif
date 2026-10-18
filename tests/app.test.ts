@@ -24,7 +24,7 @@ describe("remembered settings", () => {
   });
 
   it("drops values that are out of range or the wrong type", () => {
-    const save = (value: unknown) => memoryStorage({ "nobsvideo2gif:settings": JSON.stringify(value) });
+    const save = (value: unknown) => memoryStorage({ "localgif:settings": JSON.stringify(value) });
     expect(loadSettings(save({ fps: 0, colors: 2 }))).toEqual({});
     expect(loadSettings(save({ fps: 500, colors: 1000 }))).toEqual({});
     expect(loadSettings(save({ fps: "12", colors: null }))).toEqual({});
@@ -33,7 +33,7 @@ describe("remembered settings", () => {
   });
 
   it("survives corrupt data and blocked storage", () => {
-    expect(loadSettings(memoryStorage({ "nobsvideo2gif:settings": "{not json" }))).toEqual({});
+    expect(loadSettings(memoryStorage({ "localgif:settings": "{not json" }))).toEqual({});
     const blocked = {
       getItem: () => {
         throw new DOMException("denied", "SecurityError");

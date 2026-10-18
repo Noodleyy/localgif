@@ -3,7 +3,7 @@ import { MAX_COLORS, MAX_GIF_FPS, MIN_COLORS } from "./gif";
 // Only FPS and quality: the size is relative to each video.
 type SavedSettings = { fps: number; colors: number };
 
-const KEY = "nobsvideo2gif:settings";
+const KEY = "localgif:settings";
 
 export function loadSettings(storage?: Pick<Storage, "getItem">): Partial<SavedSettings> {
   try {
