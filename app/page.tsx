@@ -18,12 +18,6 @@ type VideoMeta = { duration: number; width: number; height: number };
 // what the skeleton cards are laid out with while the first video loads
 const PLACEHOLDER_META: VideoMeta = { duration: 10, width: 1920, height: 1080 };
 
-function preload(url: string) {
-  const img = new Image();
-  img.src = url;
-  return img.decode().catch(() => {});
-}
-
 // Live-recorded WebM reports an Infinity duration until the browser has seen the end,
 // so seek far past it and wait for the real value.
 function durationFromSeek(video: HTMLVideoElement): Promise<number> {
@@ -224,7 +218,6 @@ export default function Page() {
         if (!isCancelled()) setProgress(Math.floor(p * 100) / 100);
       });
       const url = URL.createObjectURL(new Blob([data as Uint8Array<ArrayBuffer>], { type: "image/gif" }));
-      await preload(url); // so it appears in one go instead of painting in
       if (isCancelled()) return URL.revokeObjectURL(url);
       setGif({ url, bytes: data.byteLength, ...size, name });
     } catch (err) {
