@@ -1,5 +1,3 @@
-"use client";
-
 import { useState } from "react";
 import { MAX_COLORS, MAX_GIF_FPS, MIN_COLORS } from "../lib/gif";
 import { clamp } from "../lib/time";

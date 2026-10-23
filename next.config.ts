@@ -3,7 +3,7 @@ import { statSync } from "node:fs";
 
 // A static site for GitHub Pages. BASE_PATH is "/<repo>" there (set by the deploy workflow).
 const basePath = process.env.BASE_PATH ?? "";
-// copied in by scripts/copy-ffmpeg-core.mjs before every dev/build; used for the download percentage
+// copied in by scripts/copy-ffmpeg.mjs before every dev/build; used for the download percentage
 const wasmBytes = statSync("public/ffmpeg/core/ffmpeg-core.wasm", { throwIfNoEntry: false })?.size ?? 0;
 
 const nextConfig: NextConfig = {

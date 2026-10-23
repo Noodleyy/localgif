@@ -1,5 +1,3 @@
-"use client";
-
 import { useState } from "react";
 
 export type VideoStatus = "loading" | "ready" | "no-preview" | "error";

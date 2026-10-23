@@ -21,8 +21,8 @@ libass and zimg, each under its own license.
 
 ## ffmpeg.wasm JavaScript API (`@ffmpeg/ffmpeg` 0.12.15) — MIT
 
-Bundled into the site, and a copy of its web worker lives in
-`public/ffmpeg/worker.js`, `const.js` and `errors.js`.
+Bundled into the site; its web worker (`worker.js`, `const.js`, `errors.js`) is copied
+into `public/ffmpeg/` at build time.
 Author: Jerome Wu. Source: https://github.com/ffmpegwasm/ffmpeg.wasm
 
 ## Bundled JavaScript libraries — MIT

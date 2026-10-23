@@ -1,9 +1,8 @@
 import { FFmpeg } from "@ffmpeg/ffmpeg";
 
-// Served by the site itself (see scripts/copy-ffmpeg-core.mjs). The single-threaded core:
-// its memory can grow to 2 GiB, the multithreaded one is fixed at 1 GiB and needs COOP/COEP
-// headers, which GitHub Pages can't send. public/ffmpeg/worker.js is a copy of the
-// library's worker because bundlers break the original's import.
+// Served by the site itself (copied by scripts/copy-ffmpeg.mjs), the worker included because
+// bundlers break its import. The single-threaded core: its memory can grow to 2 GiB, the
+// multithreaded one is fixed at 1 GiB and needs COOP/COEP headers, which GitHub Pages can't send.
 const FFMPEG_DIR = `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/ffmpeg`;
 const WASM_BYTES = Number(process.env.NEXT_PUBLIC_FFMPEG_WASM_BYTES) || 0;
 

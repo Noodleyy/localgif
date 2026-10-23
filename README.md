@@ -36,8 +36,9 @@ Notes:
 - Linting uses `typescript-eslint`, `@eslint-react` and `eslint-plugin-jsx-a11y-x` (accessibility)
   instead of `eslint-config-next`: its Next-specific rules (fonts, `next/script`, pages router)
   don't apply to this app, and it pulled in unsupported and vulnerable packages.
-- The converter (`@ffmpeg/core`, ~31 MB) is copied from `node_modules` into `public/ffmpeg/core/` by
-  `scripts/copy-ffmpeg-core.mjs` before every `dev`/`build`, and served by the site itself — no CDN.
+- The converter (`@ffmpeg/core`, ~31 MB) and the web worker of `@ffmpeg/ffmpeg` (bundlers break its
+  import of the core) are copied from `node_modules` into `public/ffmpeg/` by
+  `scripts/copy-ffmpeg.mjs` before every `dev`/`build`, and served by the site itself — no CDN.
   It's git-ignored; to update it, bump `@ffmpeg/core` in `package.json` (the tests use the same copy).
   Files that are already up to date are skipped (on Windows a file served by a running dev server
   can't be overwritten).
@@ -53,9 +54,8 @@ app/
   page.tsx           the video, trim and settings state, and the layout
   useConversion.ts   one conversion at a time: start, cancel, progress, the last GIF ("View GIF")
   components/        presentational pieces (upload box, preview, timeline, settings, result dialog, footer)
-public/ffmpeg/       copy of @ffmpeg/ffmpeg's worker (bundlers break the original's worker import);
-                     core/ gets the converter itself at dev/build time (git-ignored)
-scripts/             copy-ffmpeg-core.mjs
+public/ffmpeg/       the converter and its worker, copied in at dev/build time (git-ignored)
+scripts/             copy-ffmpeg.mjs
 .github/workflows/   deploy.yml: lint, test, build, publish to GitHub Pages
 tests/
   gif.test.ts        fast unit tests for the pure helpers

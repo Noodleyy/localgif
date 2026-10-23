@@ -4,9 +4,9 @@
   "private": true,
   "license": "GPL-3.0-or-later",
   "scripts": {
-    "predev": "node scripts/copy-ffmpeg-core.mjs",
+    "predev": "node scripts/copy-ffmpeg.mjs",
     "dev": "next dev",
-    "prebuild": "node scripts/copy-ffmpeg-core.mjs",
+    "prebuild": "node scripts/copy-ffmpeg.mjs",
     "build": "next build",
     "start": "npx --yes serve@14.2.4 out",
     "lint": "eslint",

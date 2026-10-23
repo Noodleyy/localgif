@@ -44,5 +44,5 @@ next-env.d.ts
 _backup_before_refactor.zip
 .claude/settings.local.json
 
-# ffmpeg.wasm core, copied from node_modules by scripts/copy-ffmpeg-core.mjs (~31 MB)
-/public/ffmpeg/core/
+# ffmpeg.wasm core + worker, copied from node_modules by scripts/copy-ffmpeg.mjs (~31 MB)
+/public/ffmpeg/
