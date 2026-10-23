@@ -29,6 +29,5 @@ Author: Jerome Wu. Source: https://github.com/ffmpegwasm/ffmpeg.wasm
 
 - Next.js 16.3.8 — Copyright (c) 2025 Vercel, Inc.
 - React 19.2.4 / React DOM — Copyright (c) Meta Platforms, Inc. and affiliates.
-- Framer Motion 13.0.0 — Copyright (c) 2018 Framer B.V.
 
 Their full license texts are in each package's `LICENSE` file under `node_modules/`.

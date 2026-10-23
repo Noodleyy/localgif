@@ -1,15 +1,9 @@
-import { motion } from "framer-motion";
-
 const link = "text-ink underline underline-offset-2";
 
 // the GPL asks to say what the app is built on and where its source is
 export function Footer() {
   return (
-    <motion.footer
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ duration: 0.5, delay: 0.25 }}
-      className="pt-2 pb-8 text-center text-xs leading-relaxed text-ink-muted"
+    <footer className="fade-in pt-2 [animation-delay:0.25s] [animation-duration:0.5s] pb-8 text-center text-xs leading-relaxed text-ink-muted"
     >
       <p>Runs entirely in your browser — your video never leaves your device.</p>
       <p>
@@ -35,6 +29,6 @@ export function Footer() {
         )}
         .
       </p>
-    </motion.footer>
+    </footer>
   );
 }

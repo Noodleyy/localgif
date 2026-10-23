@@ -1,5 +1,4 @@
 import { useRef, useState } from "react";
-import { motion } from "framer-motion";
 import { formatBytes } from "../lib/format";
 import { Icon } from "./icons";
 
@@ -24,10 +23,7 @@ export function UploadBox({ onFileSelect, file }: UploadBoxProps) {
   const mutedTextClass = isDragging ? "text-ink" : "text-ink-muted";
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4, delay: 0.1 }}
+    <div
       role="button"
       tabIndex={0}
       onClick={() => inputRef.current?.click()}
@@ -46,7 +42,7 @@ export function UploadBox({ onFileSelect, file }: UploadBoxProps) {
       }}
       onDrop={handleDrop}
       // the height eases between drop zone and bar thanks to interpolate-size (globals.css)
-      className={`group w-full cursor-pointer overflow-hidden rounded-xl border-2 border-dashed transition-[height,padding,border-color,background-color,scale] duration-300 ease-out motion-reduce:transition-colors motion-safe:active:scale-[0.99] ${
+      className={`rise group w-full cursor-pointer [animation-delay:0.1s] [animation-duration:0.4s] overflow-hidden rounded-xl border-2 border-dashed transition-[height,padding,border-color,background-color,scale] duration-300 ease-out motion-reduce:transition-colors motion-safe:active:scale-[0.99] ${
         isDragging ? "border-primary-soft bg-surface-alt motion-safe:scale-[1.01]" : "border-border-strong bg-surface hover:border-primary-soft"
       } ${file ? "flex items-center gap-3 px-4 py-3" : "flex h-56 flex-col items-center justify-center gap-3 p-6 text-center sm:h-72 lg:h-80"}`}
     >
@@ -82,6 +78,6 @@ export function UploadBox({ onFileSelect, file }: UploadBoxProps) {
           e.target.value = "";
         }}
       />
-    </motion.div>
+    </div>
   );
 }

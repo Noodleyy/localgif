@@ -53,9 +53,12 @@ app/
   lib/settings.ts    remembers FPS and quality between visits (localStorage)
   lib/time.ts        clamp / frame-step helpers
   lib/format.ts      timecode, file size and duration formatting
-  page.tsx           the video, trim and settings state, and the layout
+  page.tsx           wires the hooks and components together, and the layout
+  useVideoSource.ts  the picked video: preview URL, size and length, frame rate (ffprobe)
+  usePlayback.ts     the preview: plays in a loop between the trim points, frame steps
   useConversion.ts   one conversion at a time: start, cancel, progress, the last GIF ("View GIF")
-  components/        presentational pieces (upload box, preview, timeline, settings, result dialog, footer)
+  components/        presentational pieces (upload box, preview, timeline, settings, result dialog, footer);
+                     ui.tsx and icons.tsx are the shared building blocks (buttons, bars, cards, icons)
 public/ffmpeg/       the converter and its worker, copied in at dev/build time (git-ignored)
 scripts/             copy-ffmpeg.mjs
 .github/workflows/   deploy.yml: lint, test, build, publish to GitHub Pages
@@ -134,10 +137,10 @@ Phone layout is the default; `sm:` (≥640px) and `lg:` (≥1024px) classes only
 - The drop zone eases into the compact file bar (a CSS height transition, using `interpolate-size`).
 - Small touches: page entrance, icon lift on hover/drag, button hover/press, a gloss on the progress
   bar, one pulse on Download when the GIF is ready.
-- framer-motion only for things appearing and disappearing (dialog, fade-ins); hover/press effects are CSS.
-- **Reduce motion** (OS setting): one rule in `globals.css` switches off all CSS animation, and
-  framer-motion skips movement (`MotionConfig reducedMotion="user"`), keeping only short fades.
-  Nothing keeps animating once the page is idle (WCAG 2.2.2).
+- All of it is CSS: entrances are small keyframe classes (`.rise`, `.fade-in`, `.pop`, `.draw`), the
+  result `<dialog>` fades and scales in and out with `@starting-style` and `allow-discrete` transitions.
+- **Reduce motion** (OS setting): one rule in `globals.css` switches off all animation, and the dialog
+  only fades. Nothing keeps animating once the page is idle (WCAG 2.2.2).
 
 ## Accessibility (WCAG 2.2 AA)
 
@@ -148,11 +151,12 @@ dialog converting/ready/failed, phone width) plus manual checks. Things to keep 
   4.5:1, control edges / focus ring / slider thumb 3:1. Never show a state by color alone (the memory
   meter always says "Memory OK / Close to the limit / Likely to run out").
 - **Focus**: one global `:focus-visible` ring (light purple). Don't add `outline-none`.
-- **Dialog**: focus moves in on open, Tab wraps inside, the page behind is `inert`, focus returns to
-  Convert on close. Escape closes it, or cancels a running conversion.
+- **Dialog**: a native modal `<dialog>`, so the browser makes the page behind inert, keeps Tab inside
+  it (and the browser's own controls) and returns focus to where it was on close. Focus moves to
+  Download / Close when there's an outcome. Escape closes it, or cancels a running conversion.
 - **Announcements**: `role="status"` / `aria-live` for video loading state, memory level and the
   conversion outcome.
-- **No auto-playing motion** (the background is static); framer animations respect "reduce motion".
+- **No auto-playing motion** (the background is static); all animation respects "reduce motion".
 - **Targets** are at least 24px (small buttons get an invisible `before:` hit area).
 
 ## License
