@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { formatBytes } from "../lib/format";
 
 type Size = { width: number; height: number };
 export type Gif = Size & { url: string; bytes: number; name: string };
@@ -30,11 +31,6 @@ function frameStyle({ width, height }: Size): React.CSSProperties {
     minHeight: `min(10rem, ${AVAILABLE_H})`,
     maxHeight: AVAILABLE_H,
   };
-}
-
-function formatBytes(bytes: number) {
-  const mb = bytes / (1024 * 1024);
-  return mb >= 1 ? `${mb.toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`;
 }
 
 export function GifResult({ gif, error, isConverting, progress, loadProgress, convertingSize, onClose, onCancel }: GifResultProps) {

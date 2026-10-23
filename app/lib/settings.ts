@@ -1,4 +1,4 @@
-import { MAX_COLORS, MAX_GIF_FPS, MIN_COLORS } from "./gif";
+import { clampColors, clampFps } from "./gif";
 
 // Only FPS and quality: the size is relative to each video.
 type SavedSettings = { fps: number; colors: number };
@@ -10,8 +10,8 @@ export function loadSettings(storage?: Pick<Storage, "getItem">): Partial<SavedS
     // inside the try: even touching localStorage throws when storage is blocked
     const saved = JSON.parse((storage ?? localStorage).getItem(KEY) ?? "{}");
     const result: Partial<SavedSettings> = {};
-    if (Number.isFinite(saved.fps) && saved.fps >= 1 && saved.fps <= MAX_GIF_FPS) result.fps = saved.fps;
-    if (Number.isInteger(saved.colors) && saved.colors >= MIN_COLORS && saved.colors <= MAX_COLORS) result.colors = saved.colors;
+    if (Number.isFinite(saved.fps) && clampFps(saved.fps) === saved.fps) result.fps = saved.fps;
+    if (Number.isInteger(saved.colors) && clampColors(saved.colors) === saved.colors) result.colors = saved.colors;
     return result;
   } catch {
     return {};

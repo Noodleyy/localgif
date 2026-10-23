@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
-import { clamp, formatTimecode } from "../lib/time";
+import { formatTimecode } from "../lib/format";
+import { clamp } from "../lib/time";
 
 export type Trim = { start: number; end: number };
 type Edge = keyof Trim;

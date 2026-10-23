@@ -47,10 +47,12 @@ Notes:
 
 ```
 app/
-  lib/gif.ts         the conversion core: ffmpeg args, convertToGif, probeVideo, out-of-memory estimate
+  lib/gif.ts         the conversion core: ffmpeg args, convertToGif, probeVideo
+  lib/memory.ts      the out-of-memory estimate
   lib/ffmpeg.ts      loads ffmpeg.wasm in the browser (once, with download progress); resets it to cancel or after a crash
   lib/settings.ts    remembers FPS and quality between visits (localStorage)
-  lib/time.ts        clamp / frame-step / timecode helpers
+  lib/time.ts        clamp / frame-step helpers
+  lib/format.ts      timecode, file size and duration formatting
   page.tsx           the video, trim and settings state, and the layout
   useConversion.ts   one conversion at a time: start, cancel, progress, the last GIF ("View GIF")
   components/        presentational pieces (upload box, preview, timeline, settings, result dialog, footer)

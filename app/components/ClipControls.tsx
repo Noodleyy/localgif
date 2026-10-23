@@ -1,4 +1,4 @@
-import { formatTimecode } from "../lib/time";
+import { formatTimecode } from "../lib/format";
 import { Pending } from "./Pending";
 import { Timeline, type Trim } from "./Timeline";
 

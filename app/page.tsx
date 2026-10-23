@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { MotionConfig, motion } from "framer-motion";
 import { getFFmpeg } from "./lib/ffmpeg";
-import { estimateConversionRisk, maxOutputFps, probeVideo, DEFAULT_FPS, type VideoInfo } from "./lib/gif";
+import { maxOutputFps, probeVideo, DEFAULT_FPS, type VideoInfo } from "./lib/gif";
+import { estimateConversionRisk } from "./lib/memory";
 import { clamp, stepFrame } from "./lib/time";
 import { loadSettings, saveSettings } from "./lib/settings";
 import { UploadBox } from "./components/UploadBox";

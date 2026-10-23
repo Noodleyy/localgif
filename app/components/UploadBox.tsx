@@ -1,10 +1,6 @@
 import { useRef, useState } from "react";
 import { motion } from "framer-motion";
-
-function formatBytes(bytes: number) {
-  const mb = bytes / (1024 * 1024);
-  return mb >= 1024 ? `${(mb / 1024).toFixed(1)} GB` : `${mb.toFixed(1)} MB`;
-}
+import { formatBytes } from "../lib/format";
 
 type UploadBoxProps = {
   onFileSelect: (file: File) => void;

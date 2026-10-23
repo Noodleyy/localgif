@@ -1,4 +1,6 @@
 // No React in here, so the tests can run it in Node against the same ffmpeg.wasm build.
+import { MEMORY_LIMIT_MB } from "./memory";
+import { clamp } from "./time";
 
 export const DEFAULT_FPS = 30;
 export const MIN_COLORS = 4; // palettegen fails below 4
@@ -6,6 +8,9 @@ export const MAX_COLORS = 256;
 // GIF delays are whole 1/100 s; above 50 fps they round to 1/100 s, which browsers
 // replace with 1/10 s, so the GIF would play slowly.
 export const MAX_GIF_FPS = 50;
+
+export const clampFps = (fps: number) => clamp(fps, 1, MAX_GIF_FPS);
+export const clampColors = (colors: number) => clamp(Math.round(colors), MIN_COLORS, MAX_COLORS);
 
 /** The part of @ffmpeg/ffmpeg's FFmpeg class used here. */
 export interface FFmpegLike {
@@ -59,11 +64,9 @@ async function withMountedFile<T>(ffmpeg: FFmpegLike, file: File, read: (path: s
 const FRAME_LOG = /\bn:\s*\d+\s+pts:/;
 
 export function gifArgs(input: string, output: string, o: GifOptions): string[] {
-  const colors = Math.min(Math.max(Math.round(o.colors), MIN_COLORS), MAX_COLORS);
-  const fps = Math.min(Math.max(o.fps, 1), MAX_GIF_FPS);
   const filter =
-    `fps=${fps},scale=${o.width}:-1:flags=lanczos,showinfo=checksum=0,split[s0][s1];` +
-    `[s0]palettegen=max_colors=${colors}[p];[s1][p]paletteuse,showinfo=checksum=0`;
+    `fps=${clampFps(o.fps)},scale=${o.width}:-1:flags=lanczos,showinfo=checksum=0,split[s0][s1];` +
+    `[s0]palettegen=max_colors=${clampColors(o.colors)}[p];[s1][p]paletteuse,showinfo=checksum=0`;
   return [
     // the log level is global in ffmpeg.wasm: an earlier `ffprobe -v error` would hide the showinfo lines
     "-loglevel", "info",
@@ -77,7 +80,7 @@ export function gifArgs(input: string, output: string, o: GifOptions): string[] 
 }
 
 export function frameCount(o: Pick<GifOptions, "start" | "end" | "fps">) {
-  return Math.max(1, Math.ceil((o.end - o.start) * Math.min(o.fps, MAX_GIF_FPS)));
+  return Math.max(1, Math.ceil((o.end - o.start) * clampFps(o.fps)));
 }
 
 export async function convertToGif(
@@ -167,46 +170,5 @@ export async function probeVideo(ffmpeg: FFmpegLike, file: File): Promise<VideoI
 }
 
 export function maxOutputFps(sourceFps: number): number {
-  return Math.min(MAX_GIF_FPS, Math.max(1, Math.round(sourceFps)));
-}
-
-// Out-of-memory estimate. ffmpeg.wasm can use at most 2 GiB. palettegen has to see every
-// frame before paletteuse starts, so all output frames stay in memory (RGBA) until the
-// end; the input file doesn't count (WORKERFS). Constants fitted to measured peaks,
-// re-checked by tests/memory.test.ts.
-const MB = 1024 * 1024;
-const MEMORY_LIMIT_MB = 2048;
-const ENGINE_BASE_MB = 32;
-const DECODER_FRAMES = 4; // YUV 4:2:0 = 1.5 bytes/pixel
-const BUFFERED_FRAME_OVERHEAD = 1.1;
-const PER_FRAME_MB = 0.1;
-const HIGH = 0.9; // model error ±10% and the heap grows in steps
-const MODERATE = 0.75;
-
-export type ConversionRisk = {
-  estimatedMB: number;
-  limitMB: number;
-  maxSeconds: number; // longest selection that stays under HIGH at these settings
-  level: "none" | "moderate" | "high";
-};
-
-export function estimateConversionRisk(p: {
-  clipDuration: number;
-  sourceWidth: number;
-  sourceHeight: number;
-  outputFps: number;
-  outputWidth: number;
-  outputHeight: number;
-}): ConversionRisk {
-  const fixedMB = ENGINE_BASE_MB + (p.sourceWidth * p.sourceHeight * 1.5 * DECODER_FRAMES) / MB;
-  const frameMB = (p.outputWidth * p.outputHeight * 4 * BUFFERED_FRAME_OVERHEAD) / MB + PER_FRAME_MB;
-  const frames = Math.ceil(Math.max(0, p.clipDuration) * p.outputFps);
-  const estimatedMB = fixedMB + frames * frameMB;
-  const ratio = estimatedMB / MEMORY_LIMIT_MB;
-  return {
-    estimatedMB,
-    limitMB: MEMORY_LIMIT_MB,
-    maxSeconds: Math.max(0, (HIGH * MEMORY_LIMIT_MB - fixedMB) / frameMB / p.outputFps),
-    level: ratio >= HIGH ? "high" : ratio >= MODERATE ? "moderate" : "none",
-  };
+  return clampFps(Math.round(sourceFps));
 }

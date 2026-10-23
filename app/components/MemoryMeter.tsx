@@ -1,4 +1,5 @@
-import type { ConversionRisk } from "../lib/gif";
+import { formatBytes, formatSeconds } from "../lib/format";
+import type { ConversionRisk } from "../lib/memory";
 
 // Same structure in every state so the layout never shifts. The level is always in
 // words too, never only a color.
@@ -8,14 +9,7 @@ const STYLE = {
   high: { box: "border-danger/40 bg-danger/10", bar: "bg-danger", text: "text-danger", label: "Likely to run out" },
 };
 
-function formatMB(mb: number) {
-  return mb >= 1024 ? `${(mb / 1024).toFixed(1)} GB` : `${Math.round(mb)} MB`;
-}
-
-function formatSeconds(s: number) {
-  if (s >= 60) return `${Math.floor(s / 60)}m ${Math.floor(s % 60)}s`;
-  return s >= 10 ? `${Math.floor(s)}s` : `${Math.floor(s * 10) / 10}s`;
-}
+const formatMB = (mb: number) => formatBytes(mb * 1024 * 1024);
 
 export function MemoryMeter({ risk }: { risk: ConversionRisk }) {
   const style = STYLE[risk.level];

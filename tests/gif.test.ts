@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { estimateConversionRisk, fileExtension, frameCount, gifArgs, maxOutputFps, parseFrameRate } from "../app/lib/gif";
-import { formatTimecode, stepFrame } from "../app/lib/time";
-
+import { fileExtension, frameCount, gifArgs, maxOutputFps, parseFrameRate } from "../app/lib/gif";
+import { estimateConversionRisk } from "../app/lib/memory";
+import { formatBytes, formatSeconds, formatTimecode } from "../app/lib/format";
+import { stepFrame } from "../app/lib/time";
 
 describe("gifArgs", () => {
   it("seeks to the trim start, limits to the trim length and builds the palette filter", () => {
@@ -134,5 +135,19 @@ describe("time helpers", () => {
     expect(formatTimecode(83.456)).toBe("01:23:45");
     expect(formatTimecode(0.29)).toBe("00:00:29"); // not :28 from floating-point error
     expect(formatTimecode(0.1 + 0.2)).toBe("00:00:30");
+  });
+
+  it("formats sizes in KB, MB and GB", () => {
+    expect(formatBytes(100)).toBe("1 KB");
+    expect(formatBytes(300 * 1024)).toBe("300 KB");
+    expect(formatBytes(2.34 * 1024 ** 2)).toBe("2.3 MB");
+    expect(formatBytes(412 * 1024 ** 2)).toBe("412 MB");
+    expect(formatBytes(2 * 1024 ** 3)).toBe("2.0 GB");
+  });
+
+  it("formats durations", () => {
+    expect(formatSeconds(4.56)).toBe("4.5s");
+    expect(formatSeconds(42.9)).toBe("42s");
+    expect(formatSeconds(125)).toBe("2m 5s");
   });
 });

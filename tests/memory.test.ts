@@ -1,6 +1,7 @@
 // Each case runs on a fresh engine; wasm memory never shrinks, so its size is the peak.
 import { beforeAll, describe, expect, it } from "vitest";
-import { convertToGif, estimateConversionRisk } from "../app/lib/gif";
+import { convertToGif } from "../app/lib/gif";
+import { estimateConversionRisk } from "../app/lib/memory";
 import { asFFmpeg, loadCore, makeVideo } from "./helpers";
 
 const MB = 1024 * 1024;
