@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes, HTMLAttributes } from "react";
+import { useId, type ButtonHTMLAttributes, type HTMLAttributes } from "react";
 import { clamp } from "../lib/time";
 import { Icon, type IconName } from "./icons";
 
@@ -30,6 +30,19 @@ export function IconButton({ icon, label, tone = "neutral", compact, iconClassNa
     >
       <Icon name={icon} className={iconClassName} />
     </button>
+  );
+}
+
+/** A titled section of the page. */
+export function Card({ title, className = "", children, ...props }: HTMLAttributes<HTMLElement> & { title: string }) {
+  const id = useId();
+  return (
+    <section aria-labelledby={id} className={`flex flex-col rounded-xl border border-border bg-surface p-4 sm:p-6 ${className}`} {...props}>
+      <h2 id={id} className="text-xs font-semibold tracking-wide text-ink-muted uppercase">
+        {title}
+      </h2>
+      {children}
+    </section>
   );
 }
 

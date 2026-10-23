@@ -10,13 +10,7 @@ type VideoPreviewProps = {
   status: VideoStatus;
   converterLoad: number | null; // 0..1 while the converter downloads
   className?: string;
-  onLoadedMetadata: (e: React.SyntheticEvent<HTMLVideoElement>) => void;
-  onError: () => void;
-  onTimeUpdate: (e: React.SyntheticEvent<HTMLVideoElement>) => void;
-  onPlay: () => void;
-  onPause: () => void;
-  onEnded: (e: React.SyntheticEvent<HTMLVideoElement>) => void;
-};
+} & Pick<React.VideoHTMLAttributes<HTMLVideoElement>, "onLoadedMetadata" | "onError" | "onTimeUpdate" | "onPlay" | "onPause" | "onEnded">;
 
 const MESSAGES = {
   "no-preview": {

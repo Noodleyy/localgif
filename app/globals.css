@@ -132,6 +132,9 @@ body {
   .fade-in {
     animation: reveal 0.3s ease-out backwards;
   }
+  .rise {
+    animation: rise 0.3s ease-out backwards;
+  }
   /* an SVG shape with pathLength={1} draws itself */
   .draw {
     stroke-dasharray: 1;
@@ -184,6 +187,12 @@ body {
   from {
     opacity: 0;
     scale: 0.9;
+  }
+}
+@keyframes rise {
+  from {
+    opacity: 0;
+    translate: 0 var(--rise, 8px);
   }
 }
 @keyframes draw {
