@@ -124,6 +124,73 @@ body {
   animation: shine 1.4s linear infinite;
 }
 
+/* in a layer, so utilities like [animation-delay:…] still apply */
+@layer components {
+  .pop {
+    animation: pop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) 0.05s backwards;
+  }
+  .fade-in {
+    animation: reveal 0.3s ease-out backwards;
+  }
+  /* an SVG shape with pathLength={1} draws itself */
+  .draw {
+    stroke-dasharray: 1;
+    animation: draw 0.4s ease-out backwards;
+  }
+}
+
+/* The result <dialog> fades and scales in, and out again: allow-discrete keeps it on screen
+   (and in the top layer) until its exit transition is done. */
+.modal,
+.modal::backdrop {
+  opacity: 0;
+  transition:
+    opacity 0.2s,
+    scale 0.3s cubic-bezier(0.34, 1.4, 0.64, 1),
+    translate 0.3s cubic-bezier(0.34, 1.4, 0.64, 1),
+    display 0.3s allow-discrete,
+    overlay 0.3s allow-discrete;
+}
+.modal::backdrop {
+  background: rgb(13 11 18 / 0.7);
+  backdrop-filter: blur(8px);
+}
+.modal[open],
+.modal[open]::backdrop {
+  opacity: 1;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .modal:not([open]) {
+    scale: 0.9;
+    translate: 0 16px;
+  }
+}
+@starting-style {
+  .modal[open],
+  .modal[open]::backdrop {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  @starting-style {
+    .modal[open] {
+      scale: 0.9;
+      translate: 0 16px;
+    }
+  }
+}
+
+@keyframes pop {
+  from {
+    opacity: 0;
+    scale: 0.9;
+  }
+}
+@keyframes draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+}
 @keyframes shimmer {
   from {
     background-position: -180vw 0;

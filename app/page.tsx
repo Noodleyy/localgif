@@ -40,7 +40,6 @@ function durationFromSeek(video: HTMLVideoElement): Promise<number> {
 
 export default function Page() {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const convertButtonRef = useRef<HTMLButtonElement>(null);
 
   const [file, setFile] = useState<File | null>(null);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
@@ -69,8 +68,7 @@ export default function Page() {
     setCurrentTime(0);
     setIsPlaying(false);
     setSettings((s) => ({ ...s, scale: 1 }));
-    conversion.close();
-    conversion.discard();
+    conversion.reset();
 
     const probe = { file: newFile, info: getFFmpeg().then((ffmpeg) => probeVideo(ffmpeg, newFile)) };
     probeRef.current = probe;
@@ -189,14 +187,7 @@ export default function Page() {
     conversion.convert(file, { start: trim.start, end: trim.end, fps, colors, width: Math.round(meta.width * scale) }, outputSize);
   }
 
-  const { dialogOpen, isConverting, gif } = conversion;
-
-  // the page behind the dialog is inert, so focus needs a place to go back to
-  const wasOpenRef = useRef(false);
-  useEffect(() => {
-    if (wasOpenRef.current && !dialogOpen) convertButtonRef.current?.focus();
-    wasOpenRef.current = dialogOpen;
-  }, [dialogOpen]);
+  const { busy } = conversion;
 
   // while a video loads, the cards are skeletons (over the previous video's values, if any)
   const isLoading = file !== null && videoStatus === "loading";
@@ -227,7 +218,6 @@ export default function Page() {
   return (
     <MotionConfig reducedMotion="user">
     <main
-      inert={dialogOpen}
       className="mx-auto w-full max-w-2xl px-4 pt-6 sm:px-6 sm:pt-12 lg:max-w-6xl lg:pt-16 2xl:max-w-7xl"
     >
       <motion.h1
@@ -310,14 +300,13 @@ export default function Page() {
             <div className="sticky bottom-0 z-10 -mx-4 border-t border-border bg-bg/90 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur sm:bottom-[max(1rem,env(safe-area-inset-bottom))] sm:mx-0 sm:rounded-xl sm:border sm:bg-surface/90 sm:p-3 sm:shadow-lg lg:static lg:rounded-none lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none lg:backdrop-blur-none">
               <div {...loadProps} className={`flex gap-2 sm:justify-center ${loadState}`}>
                 <button
-                  ref={convertButtonRef}
                   onClick={handleConvert}
-                  disabled={isConverting || !canConvert}
+                  disabled={busy || !canConvert}
                   className={`min-w-0 flex-1 rounded-lg border border-transparent bg-primary py-3 font-medium text-ink enabled:hover:bg-primary-hover enabled:hover:shadow-[0_8px_24px_-8px_rgb(124_58_237/0.8)] disabled:cursor-not-allowed disabled:opacity-50 sm:w-64 sm:flex-none lg:flex-1 lg:py-2.5 ${lift}`}
                 >
-                  {isConverting ? "Converting..." : "Convert to GIF"}
+                  {busy ? "Converting..." : "Convert to GIF"}
                 </button>
-                {gif && !isConverting && (
+                {conversion.state.kind === "done" && !busy && (
                   <button
                     onClick={conversion.reopen}
                     className={`shrink-0 rounded-lg border border-border-strong bg-surface-alt px-4 py-3 font-medium text-ink hover:bg-surface-hover lg:py-2.5 ${lift}`}
@@ -335,11 +324,9 @@ export default function Page() {
     </main>
 
       <GifResult
-        gif={conversion.showResult ? gif : null}
-        error={conversion.showResult ? conversion.error : null}
-        isConverting={isConverting}
-        progress={conversion.progress}
-        loadProgress={conversion.converterLoad}
+        state={conversion.state}
+        open={conversion.open}
+        converterLoad={conversion.converterLoad}
         convertingSize={outputSize}
         onClose={conversion.close}
         onCancel={conversion.cancel}

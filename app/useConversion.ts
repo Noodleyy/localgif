@@ -1,84 +1,79 @@
 import { useEffect, useRef, useState } from "react";
 import { getFFmpeg, onConverterLoad, resetFFmpeg } from "./lib/ffmpeg";
 import { convertToGif, type GifOptions } from "./lib/gif";
-import type { Gif } from "./components/GifResult";
+
+export type Size = { width: number; height: number };
+export type Gif = Size & { url: string; bytes: number; name: string };
+
+/** The last conversion. `open` (below) says whether the dialog shows it. */
+export type ConversionState =
+  | { kind: "idle" }
+  | { kind: "loading" } // waiting for the converter to download
+  | { kind: "converting"; progress: number }
+  | { kind: "done"; gif: Gif }
+  | { kind: "failed"; error: string };
 
 /** One conversion at a time: start, cancel, progress, and the last GIF (kept for "View GIF"). */
 export function useConversion() {
-  const [isConverting, setIsConverting] = useState(false);
-  const [progress, setProgress] = useState<number | null>(null); // null while the converter loads
-  const [converterLoad, setConverterLoad] = useState<number | null>(null);
-  const [gif, setGif] = useState<Gif | null>(null);
-  const [showResult, setShowResult] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [state, setState] = useState<ConversionState>({ kind: "idle" });
+  const [open, setOpen] = useState(false);
+  const [converterLoad, setConverterLoad] = useState<number | null>(null); // 0..1 while it downloads
   // cancelling bumps the run number, so the cancelled run knows to stop
   const runRef = useRef(0);
-  const phaseRef = useRef<"loading" | "converting">("loading");
 
   useEffect(() => onConverterLoad(setConverterLoad), []);
 
-  function discard() {
-    // after the dialog's exit animation is done with it
-    if (gif) setTimeout(() => URL.revokeObjectURL(gif.url), 1000);
-    setGif(null);
+  // the last GIF stays until a new conversion or video replaces it (closing the dialog keeps it)
+  function forgetGif() {
+    if (state.kind === "done") URL.revokeObjectURL(state.gif.url);
   }
 
-  function close() {
-    setShowResult(false);
-    setError(null);
-  }
-
-  async function convert(file: File, options: GifOptions, size: { width: number; height: number }) {
+  async function convert(file: File, options: GifOptions, size: Size) {
     const run = ++runRef.current;
-    const isCancelled = () => runRef.current !== run;
-    phaseRef.current = "loading";
-    discard();
-    setError(null);
-    setShowResult(true);
-    setIsConverting(true);
-    setProgress(null);
+    const isCurrent = () => runRef.current === run;
+    forgetGif();
+    setState({ kind: "loading" });
+    setOpen(true);
     try {
       const ffmpeg = await getFFmpeg();
-      if (isCancelled()) return;
-      phaseRef.current = "converting";
-      setProgress(0);
-      // whole percents, so React can skip most updates
+      if (!isCurrent()) return;
+      setState({ kind: "converting", progress: 0 });
       const data = await convertToGif(ffmpeg, file, options, (p) => {
-        if (!isCancelled()) setProgress(Math.floor(p * 100) / 100);
+        // whole percents, so React can skip most updates
+        const progress = Math.floor(p * 100) / 100;
+        if (isCurrent()) setState((s) => (s.kind === "converting" && s.progress === progress ? s : { kind: "converting", progress }));
       });
+      if (!isCurrent()) return;
       const url = URL.createObjectURL(new Blob([data as Uint8Array<ArrayBuffer>], { type: "image/gif" }));
-      if (isCancelled()) return URL.revokeObjectURL(url);
       const name = `${file.name.replace(/\.[^.]+$/, "") || "output"}.gif`;
-      setGif({ url, bytes: data.byteLength, ...size, name });
+      setState({ kind: "done", gif: { url, bytes: data.byteLength, ...size, name } });
     } catch (err) {
-      if (isCancelled()) return;
-      setError(err instanceof Error ? err.message : String(err));
+      if (!isCurrent()) return;
       resetFFmpeg(); // a crashed (e.g. out of memory) instance can't be reused
-    } finally {
-      if (!isCancelled()) setIsConverting(false);
+      setState({ kind: "failed", error: err instanceof Error ? err.message : String(err) });
     }
   }
 
   function cancel() {
     runRef.current++;
     // Only killing the worker stops ffmpeg. A download in progress may finish: it's needed anyway.
-    if (phaseRef.current === "converting") resetFFmpeg();
-    setIsConverting(false);
-    setShowResult(false);
+    if (state.kind === "converting") resetFFmpeg();
+    setOpen(false);
   }
 
   return {
-    isConverting,
-    progress,
+    state,
+    open,
+    busy: open && (state.kind === "loading" || state.kind === "converting"),
     converterLoad,
-    gif,
-    error,
-    showResult,
-    dialogOpen: isConverting || (showResult && (gif !== null || error !== null)),
     convert,
     cancel,
-    close,
-    reopen: () => setShowResult(true),
-    discard,
+    close: () => setOpen(false),
+    reopen: () => setOpen(true),
+    /** For a new video. */
+    reset() {
+      forgetGif();
+      setState({ kind: "idle" });
+    },
   };
 }
