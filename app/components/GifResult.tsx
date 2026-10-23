@@ -1,6 +1,8 @@
 import { useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { formatBytes } from "../lib/format";
+import { Icon } from "./icons";
+import { Bar, IconButton, Percent } from "./ui";
 
 type Size = { width: number; height: number };
 export type Gif = Size & { url: string; bytes: number; name: string };
@@ -112,13 +114,9 @@ export function GifResult({ gif, error, isConverting, progress, loadProgress, co
             className="relative rounded-xl border border-border bg-surface shadow-2xl"
           >
             {!isConverting && (
-              <button
-                onClick={onClose}
-                aria-label="Close"
-                className="absolute -top-3 -right-3 flex h-7 w-7 before:absolute before:-inset-2 items-center justify-center rounded-full border border-border bg-surface text-ink-muted shadow-md hover:bg-surface-alt hover:text-ink"
-              >
-                ✕
-              </button>
+              <div className="absolute -top-3 -right-3">
+                <IconButton icon="close" tone="floating" label="Close" onClick={onClose} />
+              </div>
             )}
 
             <div className="flex flex-col items-center gap-3 p-5 text-center">
@@ -128,45 +126,23 @@ export function GifResult({ gif, error, isConverting, progress, loadProgress, co
               >
                 {isConverting && (
                   <>
-                    <svg
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth={1.5}
-                      aria-hidden="true"
-                      className="h-10 w-10 text-ink-muted/60 motion-safe:animate-pulse"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        d="m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 0 0 1.5-1.5V6a1.5 1.5 0 0 0-1.5-1.5H3.75A1.5 1.5 0 0 0 2.25 6v12a1.5 1.5 0 0 0 1.5 1.5Zm10.5-11.25h.008v.008h-.008V8.25Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z"
-                      />
-                    </svg>
-                    <div
+                    <Icon name="image" className="h-10 w-10 text-ink-muted/60 motion-safe:animate-pulse" />
+                    <Bar
+                      value={barValue ?? 0}
+                      fill="progress-shine bg-primary"
                       role="progressbar"
                       aria-label={loading ? "Loading converter" : "Conversion progress"}
                       aria-valuemin={0}
                       aria-valuemax={100}
                       aria-valuenow={barValue === null ? undefined : Math.round(barValue * 100)}
-                      className="absolute inset-x-6 bottom-4 h-1.5 overflow-hidden rounded-full bg-ink/10"
-                    >
-                      <div
-                        className="progress-shine h-full rounded-full bg-primary transition-[width] duration-300 ease-out"
-                        style={{ width: `${(barValue ?? 0) * 100}%` }}
-                      />
-                    </div>
+                      className="absolute inset-x-6 bottom-4"
+                    />
                   </>
                 )}
                 {ready && <motion.img {...pop} src={ready.url} alt="GIF preview" className="h-full w-full object-scale-down" />}
                 {isFailed && (
                   <motion.div {...pop} className="flex max-h-full flex-col items-center gap-2 overflow-auto px-2">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-10 w-10 shrink-0 text-danger">
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 4.626c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z"
-                      />
-                    </svg>
+                    <Icon name="warning" className="h-10 w-10 shrink-0 text-danger" />
                     <p className="text-xs whitespace-pre-line text-ink-muted">{error}</p>
                   </motion.div>
                 )}
@@ -185,9 +161,7 @@ export function GifResult({ gif, error, isConverting, progress, loadProgress, co
                 {isConverting && (
                   <span className="font-normal text-ink-muted tabular-nums">
                     {loading ? "Loading converter…" : "Converting to GIF…"}{" "}
-                    <span className="inline-block w-[4ch] text-right">
-                      {barValue !== null && `${Math.round(barValue * 100)}%`}
-                    </span>
+                    {barValue !== null ? <Percent value={barValue} /> : <span className="inline-block w-[4ch]" />}
                   </span>
                 )}
                 {isFailed && <span>Conversion failed</span>}

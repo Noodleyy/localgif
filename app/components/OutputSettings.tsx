@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { MAX_COLORS, MAX_GIF_FPS, MIN_COLORS } from "../lib/gif";
 import { clamp } from "../lib/time";
-import { Pending } from "./Pending";
+import { IconButton, Pending } from "./ui";
 
 export type Settings = { fps: number; colors: number; scale: number };
 
@@ -11,10 +11,6 @@ type OutputSettingsProps = {
   maxFps: number | null; // null until the video's frame rate is known
   sourceWidth: number;
 };
-
-// before: gives the small buttons a bigger, invisible touch area
-const roundButtonClass =
-  "relative flex h-8 w-8 before:absolute before:-inset-1.5 items-center sm:h-6 sm:w-6 sm:before:-inset-2 justify-center rounded-full border border-border-strong bg-surface-alt text-ink shadow-sm hover:bg-surface-hover";
 
 export function OutputSettings({ settings, onChange, maxFps, sourceWidth }: OutputSettingsProps) {
   const fpsLimit = maxFps ?? MAX_GIF_FPS;
@@ -30,17 +26,7 @@ export function OutputSettings({ settings, onChange, maxFps, sourceWidth }: Outp
           FPS <span className="text-ink-muted">(max {maxFps ?? <Pending placeholder="00" />})</span>
         </label>
         <div className="flex items-center gap-3 sm:gap-2">
-          <button
-            type="button"
-            onClick={() => setFps(settings.fps - 1)}
-            aria-label="Decrease FPS"
-            title="Decrease FPS"
-            className={roundButtonClass}
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" className="h-3 w-3">
-              <path d="M5 12h14" />
-            </svg>
-          </button>
+          <IconButton icon="minus" compact label="Decrease FPS" onClick={() => setFps(settings.fps - 1)} />
           <input
             type="number"
             inputMode="numeric"
@@ -61,17 +47,7 @@ export function OutputSettings({ settings, onChange, maxFps, sourceWidth }: Outp
             // 16px on phones: iOS zooms into any smaller input on focus
             className="h-10 w-14 rounded-lg border border-border-strong bg-surface-alt text-center text-base text-ink sm:h-8 sm:w-12 sm:text-sm [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
           />
-          <button
-            type="button"
-            onClick={() => setFps(settings.fps + 1)}
-            aria-label="Increase FPS"
-            title="Increase FPS"
-            className={roundButtonClass}
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" className="h-3 w-3">
-              <path d="M12 5v14M5 12h14" />
-            </svg>
-          </button>
+          <IconButton icon="plus" compact label="Increase FPS" onClick={() => setFps(settings.fps + 1)} />
         </div>
       </div>
       <label className="flex min-w-0 flex-col gap-1.5">

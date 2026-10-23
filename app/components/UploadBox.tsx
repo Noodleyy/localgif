@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { formatBytes } from "../lib/format";
+import { Icon } from "./icons";
 
 type UploadBoxProps = {
   onFileSelect: (file: File) => void;
@@ -49,16 +50,10 @@ export function UploadBox({ onFileSelect, file }: UploadBoxProps) {
         isDragging ? "border-primary-soft bg-surface-alt motion-safe:scale-[1.01]" : "border-border-strong bg-surface hover:border-primary-soft"
       } ${file ? "flex items-center gap-3 px-4 py-3" : "flex h-56 flex-col items-center justify-center gap-3 p-6 text-center sm:h-72 lg:h-80"}`}
     >
-      <svg
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth={1.5}
-        aria-hidden="true"
+      <Icon
+        name="upload"
         className={`shrink-0 transition-transform motion-safe:group-hover:-translate-y-0.5 ${isDragging ? "motion-safe:-translate-y-1" : ""} ${file ? "h-6 w-6" : "h-8 w-8"} ${mutedTextClass}`}
-      >
-        <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v1.5A2.25 2.25 0 0 0 5.25 20.25h13.5A2.25 2.25 0 0 0 21 18v-1.5M7.5 9.75 12 5.25m0 0 4.5 4.5M12 5.25v10.5" />
-      </svg>
+      />
 
       {file ? (
         <>

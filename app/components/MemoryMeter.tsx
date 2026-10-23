@@ -1,5 +1,6 @@
 import { formatBytes, formatSeconds } from "../lib/format";
 import type { ConversionRisk } from "../lib/memory";
+import { Bar } from "./ui";
 
 // Same structure in every state so the layout never shifts. The level is always in
 // words too, never only a color.
@@ -13,7 +14,6 @@ const formatMB = (mb: number) => formatBytes(mb * 1024 * 1024);
 
 export function MemoryMeter({ risk }: { risk: ConversionRisk }) {
   const style = STYLE[risk.level];
-  const fill = Math.min(risk.estimatedMB / risk.limitMB, 1) * 100;
 
   return (
     <div className={`flex flex-col gap-2 rounded-lg border px-4 py-3 transition-colors ${style.box}`}>
@@ -25,9 +25,7 @@ export function MemoryMeter({ risk }: { risk: ConversionRisk }) {
           ~{formatMB(risk.estimatedMB)} / {formatMB(risk.limitMB)}
         </span>
       </div>
-      <div className="h-1.5 overflow-hidden rounded-full bg-ink/10">
-        <div className={`h-full rounded-full transition-all duration-300 ${style.bar}`} style={{ width: `${fill}%` }} />
-      </div>
+      <Bar value={risk.estimatedMB / risk.limitMB} fill={style.bar} />
       <div className="text-xs text-ink-muted">
         <p className="truncate tabular-nums">About {formatSeconds(risk.maxSeconds)} fits at this size and FPS.</p>
         <p>Every GIF frame is held in memory until the end.</p>
