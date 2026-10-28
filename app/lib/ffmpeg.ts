@@ -1,8 +1,9 @@
-import { FFmpeg } from "@ffmpeg/ffmpeg";
+import type { FFmpeg } from "@ffmpeg/ffmpeg";
 
-// Served by the site itself (copied by scripts/copy-ffmpeg.mjs), the worker included because
-// bundlers break its import. The single-threaded core: its memory can grow to 2 GiB, the
-// multithreaded one is fixed at 1 GiB and needs COOP/COEP headers, which GitHub Pages can't send.
+// Served by the site itself (copied by scripts/copy-ffmpeg.mjs), the library included: it's loaded
+// at runtime, not bundled (see the script for why). The single-threaded core: its memory can grow
+// to 2 GiB, the multithreaded one is fixed at 1 GiB and needs COOP/COEP headers, which GitHub Pages
+// can't send.
 const FFMPEG_DIR = `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/ffmpeg`;
 const WASM_BYTES = Number(process.env.NEXT_PUBLIC_FFMPEG_WASM_BYTES) || 0;
 
@@ -40,6 +41,7 @@ export function getFFmpeg(): Promise<FFmpeg> {
     const base = `${window.location.origin}${FFMPEG_DIR}`;
     // fetched here rather than by the worker, to show the download's progress
     const wasm = await fetchWithProgress(`${base}/core/ffmpeg-core.wasm`, WASM_BYTES, emitLoad, "application/wasm");
+    const { FFmpeg }: typeof import("@ffmpeg/ffmpeg") = await import(/* webpackIgnore: true */ `${base}/classes.js`);
     const wasmURL = URL.createObjectURL(wasm);
     try {
       const ffmpeg = new FFmpeg();

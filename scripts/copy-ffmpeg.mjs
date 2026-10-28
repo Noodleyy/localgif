@@ -1,6 +1,8 @@
 // Copies the converter into public/ffmpeg/, so the site serves it itself. Runs before `npm run dev` and `npm run build`.
 // - core/: @ffmpeg/core (~31 MB), the ffmpeg build itself
-// - the web worker of @ffmpeg/ffmpeg, because bundlers break its import of the core
+// - @ffmpeg/ffmpeg itself (its FFmpeg class and web worker), loaded at runtime instead of bundled:
+//   bundlers break the worker's import of the core, and Next 16.4's Turbopack fails the build on
+//   the class's `new Worker(new URL(...))`
 import { copyFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
@@ -13,7 +15,7 @@ const to = join(dirname(fileURLToPath(import.meta.url)), "..", "public", "ffmpeg
 
 const files = [
   ...["ffmpeg-core.js", "ffmpeg-core.wasm"].map((f) => [join(coreDir, f), join(to, "core", f)]),
-  ...["worker.js", "const.js", "errors.js"].map((f) => [join(workerDir, f), join(to, f)]),
+  ...["classes.js", "utils.js", "worker.js", "const.js", "errors.js"].map((f) => [join(workerDir, f), join(to, f)]),
 ];
 
 mkdirSync(join(to, "core"), { recursive: true });

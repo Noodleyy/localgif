@@ -29,16 +29,16 @@ Notes:
 - No special server headers are needed (GitHub Pages can't set them anyway): the single-threaded
   ffmpeg.wasm core doesn't need cross-origin isolation.
 - Versions held back on purpose:
-  - Next.js 16.3.x: from 16.4 Turbopack fails the build on the dynamic `new Worker(new URL(...))`
-    inside `@ffmpeg/ffmpeg` ("Module not found: Can't resolve <dynamic>").
   - TypeScript 5.x: `typescript-eslint` doesn't support TypeScript 7 yet.
   - `@types/node` 22: matches the Node version the deploy workflow runs.
 - Linting uses `typescript-eslint`, `@eslint-react` and `eslint-plugin-jsx-a11y-x` (accessibility)
   instead of `eslint-config-next`: its Next-specific rules (fonts, `next/script`, pages router)
   don't apply to this app, and it pulled in unsupported and vulnerable packages.
-- The converter (`@ffmpeg/core`, ~31 MB) and the web worker of `@ffmpeg/ffmpeg` (bundlers break its
-  import of the core) are copied from `node_modules` into `public/ffmpeg/` by
-  `scripts/copy-ffmpeg.mjs` before every `dev`/`build`, and served by the site itself — no CDN.
+- The converter (`@ffmpeg/core`, ~31 MB) and `@ffmpeg/ffmpeg` itself (its FFmpeg class and web
+  worker) are copied from `node_modules` into `public/ffmpeg/` by `scripts/copy-ffmpeg.mjs` before
+  every `dev`/`build`, and served by the site itself — no CDN. `app/lib/ffmpeg.ts` loads the class with
+  `import(/* webpackIgnore: true */ …)`, so it isn't bundled: bundlers break the worker's import of the
+  core, and Turbopack (Next 16.4+) fails the build on the class's dynamic `new Worker(new URL(...))`.
   It's git-ignored; to update it, bump `@ffmpeg/core` in `package.json` (the tests use the same copy).
   Files that are already up to date are skipped (on Windows a file served by a running dev server
   can't be overwritten).
