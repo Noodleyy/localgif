@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MIN_CROP, centeredCrop, clampCrop, dragCrop, setCropField, type Crop } from "../app/lib/crop";
+import { MIN_CROP, centeredCrop, clampCrop, cornerPoint, dragCrop, setCropField, type Crop } from "../app/lib/crop";
 
 const hd = { width: 1920, height: 1080 };
 const inside = (c: Crop, src = hd) => c.x >= 0 && c.y >= 0 && c.x + c.width <= src.width && c.y + c.height <= src.height;
@@ -76,5 +76,17 @@ describe("setCropField", () => {
   it("with a fixed ratio, the other side follows (and both shrink to fit)", () => {
     expect(setCropField(c, "width", 800, hd, 16 / 9)).toEqual({ ...c, width: 800, height: 450 });
     expect(setCropField(c, "height", 2000, hd, 1)).toEqual({ x: 100, y: 0, width: 1080, height: 1080 });
+  });
+});
+
+describe("cornerPoint", () => {
+  it("finds each corner of the crop", () => {
+    const c: Crop = { x: 10, y: 20, width: 100, height: 50 };
+    expect([cornerPoint(c, "nw"), cornerPoint(c, "ne"), cornerPoint(c, "sw"), cornerPoint(c, "se")]).toEqual([
+      { x: 10, y: 20 },
+      { x: 110, y: 20 },
+      { x: 10, y: 70 },
+      { x: 110, y: 70 },
+    ]);
   });
 });

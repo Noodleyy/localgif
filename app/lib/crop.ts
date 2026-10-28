@@ -71,3 +71,8 @@ export function setCropField(c: Crop, field: keyof Crop, value: number, src: Siz
   }
   return clampCrop(next, src);
 }
+
+/** Where a corner handle sits, in video pixels. */
+export function cornerPoint(c: Crop, handle: Exclude<Handle, "move">) {
+  return { x: handle.endsWith("w") ? c.x : c.x + c.width, y: handle.startsWith("n") ? c.y : c.y + c.height };
+}

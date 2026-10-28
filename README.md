@@ -77,7 +77,8 @@ tests/
 
 The Crop card picks a part of the frame: *Full* (no crop), *Free*, or a fixed ratio (1:1, 4:3, 16:9,
 9:16), which starts as the largest centered rectangle. Drag the frame over the preview to move it, a
-corner to resize it (a fixed ratio holds), or type X / Y / Width / Height in video pixels. ffmpeg crops
+corner to resize it (a fixed ratio holds; a round 4x magnifier shows that corner's real pixels, above
+it or below near the top, so a finger doesn't hide it), or type X / Y / Width / Height in video pixels. ffmpeg crops
 first (`crop=w:h:x:y` before `fps` and `scale`), so the Size slider, the memory estimate and the result
 all work with the cropped size. Formats the browser can't preview still get the frame, in the video's
 shape, just without a picture behind it.

@@ -100,7 +100,7 @@ export default function Page() {
                 converterLoad={conversion.converterLoad}
                 overlay={
                   crop && source.meta && source.status !== "loading" ? (
-                    <CropOverlay frame={source.meta} crop={crop} ratio={ASPECTS[aspect] ?? null} onChange={setCrop} />
+                    <CropOverlay frame={source.meta} crop={crop} ratio={ASPECTS[aspect] ?? null} videoRef={videoRef} onChange={setCrop} />
                   ) : undefined
                 }
                 className="rise aspect-video w-full lg:max-h-[65vh]"
