@@ -51,6 +51,7 @@ app/
   lib/memory.ts      the out-of-memory estimate
   lib/ffmpeg.ts      loads ffmpeg.wasm in the browser (once, with download progress); resets it to cancel or after a crash
   lib/settings.ts    remembers FPS and quality between visits (localStorage)
+  lib/crop.ts        the crop rectangle: presets, dragging, typed values (all in video pixels)
   lib/time.ts        clamp / frame-step helpers
   lib/format.ts      timecode, file size and duration formatting
   page.tsx           wires the hooks and components together, and the layout
@@ -64,12 +65,22 @@ scripts/             copy-ffmpeg.mjs
 .github/workflows/   deploy.yml: lint, test, build, publish to GitHub Pages
 tests/
   gif.test.ts        fast unit tests for the pure helpers
+  crop.test.ts       the crop rectangle: presets, edges, minimum size, fixed ratios
   app.test.ts        remembered settings, converter download progress
   convert.test.ts    real MP4 -> GIF conversions through ffmpeg.wasm
   memory.test.ts     checks the out-of-memory estimate against ffmpeg.wasm's real memory use
   helpers.ts         runs ffmpeg.wasm in Node + a tiny GIF parser for assertions
   fixtures/          one small HEVC clip (ffmpeg.wasm can decode HEVC but not encode it)
 ```
+
+## Crop
+
+The Crop card picks a part of the frame: *Full* (no crop), *Free*, or a fixed ratio (1:1, 4:3, 16:9,
+9:16), which starts as the largest centered rectangle. Drag the frame over the preview to move it, a
+corner to resize it (a fixed ratio holds), or type X / Y / Width / Height in video pixels. ffmpeg crops
+first (`crop=w:h:x:y` before `fps` and `scale`), so the Size slider, the memory estimate and the result
+all work with the cropped size. Formats the browser can't preview still get the frame, in the video's
+shape, just without a picture behind it.
 
 ## Tests
 
@@ -82,6 +93,7 @@ same 2 GiB memory limit. Test videos are generated on the fly with ffmpeg's buil
 | tiny 64×48, 1 s | smallest case, looping, frame count |
 | small 320×240, 2 s, with audio | trim range, fps, scaling up/down, color limits, audio ignored |
 | red-then-blue | the trim actually exports the *selected* part |
+| red left half, blue right half | the crop keeps the *selected* part of the frame, and scales after cropping |
 | portrait 360×640 @ 29.97 fps | orientation, fractional fps detection |
 | 60 fps | GIF frame delays never drop below 2/100 s (browsers slow those down) |
 | HEVC, AVI, live-recorded WebM | formats the browser can't preview (or has no duration) still probe and convert |
@@ -151,6 +163,9 @@ dialog converting/ready/failed, phone width) plus manual checks. Things to keep 
   4.5:1, control edges / focus ring / slider thumb 3:1. Never show a state by color alone (the memory
   meter always says "Memory OK / Close to the limit / Likely to run out").
 - **Focus**: one global `:focus-visible` ring (light purple). Don't add `outline-none`.
+- **Crop**: the frame over the preview is pointer-only (`aria-hidden`); the Crop card's shape choices
+  (real radio buttons) and X / Y / Width / Height fields do everything it does, without dragging
+  (WCAG 2.5.7).
 - **Dialog**: a native modal `<dialog>`, so the browser makes the page behind inert, keeps Tab inside
   it (and the browser's own controls) and returns focus to where it was on close. Focus moves to
   Download / Close when there's an outcome. Escape closes it, or cancels a running conversion.

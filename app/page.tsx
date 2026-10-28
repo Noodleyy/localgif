@@ -1,10 +1,13 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { ASPECTS, type Crop } from "./lib/crop";
 import { DEFAULT_FPS, MAX_GIF_FPS, maxOutputFps } from "./lib/gif";
 import { estimateConversionRisk } from "./lib/memory";
 import { loadSettings, saveSettings } from "./lib/settings";
 import { ClipControls } from "./components/ClipControls";
+import { CropControls } from "./components/CropControls";
+import { CropOverlay } from "./components/CropOverlay";
 import { Footer } from "./components/Footer";
 import { GifResult } from "./components/GifResult";
 import { MemoryMeter } from "./components/MemoryMeter";
@@ -26,6 +29,8 @@ const lift =
 export default function Page() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [trim, setTrim] = useState<Trim>({ start: 0, end: 0 });
+  const [crop, setCrop] = useState<Crop | null>(null); // null: the whole frame
+  const [aspect, setAspect] = useState("Full");
   const source = useVideoSource((meta) => setTrim({ start: 0, end: meta.duration }));
   const playback = usePlayback(videoRef, { trim, setTrim, duration: source.meta?.duration ?? 0, fps: source.fps ?? DEFAULT_FPS });
   const conversion = useConversion();
@@ -39,7 +44,13 @@ export default function Page() {
     source.select(file);
     playback.reset();
     conversion.reset();
+    changeCrop(null, "Full");
     setSettings((s) => ({ ...s, scale: 1 }));
+  }
+
+  function changeCrop(next: Crop | null, nextAspect: string) {
+    setCrop(next);
+    setAspect(nextAspect);
   }
 
   function changeSettings(next: Settings) {
@@ -53,16 +64,18 @@ export default function Page() {
   const loadProps = { inert: isLoading, "aria-busy": isLoading };
   const loadState = isLoading ? "skeleton" : "reveal";
 
+  // what the GIF shows: the crop, or the whole frame
+  const frame = crop ?? { width: meta?.width ?? 16, height: meta?.height ?? 9 };
   const outputSize = {
-    width: Math.max(1, Math.round((meta?.width ?? 16) * output.scale)),
-    height: Math.max(1, Math.round((meta?.height ?? 9) * output.scale)),
+    width: Math.max(1, Math.round(frame.width * output.scale)),
+    height: Math.max(1, Math.round(frame.height * output.scale)),
   };
   const canConvert = (source.status === "ready" || source.status === "no-preview") && trim.end - trim.start >= 0.01;
 
   function convert() {
     if (!source.file || !canConvert) return;
     const { fps, colors } = output;
-    conversion.convert(source.file, { ...trim, fps, colors, width: outputSize.width }, outputSize);
+    conversion.convert(source.file, { ...trim, fps, colors, crop: crop ?? undefined, width: outputSize.width }, outputSize);
   }
 
   return (
@@ -85,6 +98,11 @@ export default function Page() {
                 videoUrl={source.url}
                 status={source.status}
                 converterLoad={conversion.converterLoad}
+                overlay={
+                  crop && source.meta && source.status !== "loading" ? (
+                    <CropOverlay frame={source.meta} crop={crop} ratio={ASPECTS[aspect] ?? null} onChange={setCrop} />
+                  ) : undefined
+                }
                 className="rise aspect-video w-full lg:max-h-[65vh]"
                 {...source.events}
                 {...playback.events}
@@ -108,13 +126,19 @@ export default function Page() {
                 />
               </Card>
             )}
+
+            {meta && (
+              <Card title="Crop" {...loadProps} className={`rise gap-4 ${loadState}`}>
+                <CropControls frame={meta} crop={crop} aspect={aspect} onChange={changeCrop} />
+              </Card>
+            )}
           </div>
 
           {meta && (
             // `contents` below lg lets the Convert bar stick to the bottom of the whole page
             <div className="contents lg:sticky lg:top-6 lg:flex lg:flex-col lg:gap-6 lg:self-start">
               <Card title="Output" {...loadProps} className={`rise gap-5 ${loadState}`}>
-                <OutputSettings settings={output} onChange={changeSettings} maxFps={maxFps} sourceWidth={meta.width} />
+                <OutputSettings settings={output} onChange={changeSettings} maxFps={maxFps} frame={frame} />
                 <MemoryMeter
                   risk={estimateConversionRisk({
                     clipDuration: trim.end - trim.start,

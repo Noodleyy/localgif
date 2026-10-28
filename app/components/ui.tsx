@@ -1,4 +1,4 @@
-import { useId, type ButtonHTMLAttributes, type HTMLAttributes } from "react";
+import { useId, useState, type ButtonHTMLAttributes, type HTMLAttributes, type InputHTMLAttributes } from "react";
 import { clamp } from "../lib/time";
 import { Icon, type IconName } from "./icons";
 
@@ -72,5 +72,42 @@ export function Pending({ placeholder }: { placeholder: string }) {
       </span>
       <span className="sr-only">loading</span>
     </>
+  );
+}
+
+type NumberFieldProps = Omit<InputHTMLAttributes<HTMLInputElement>, "value" | "onChange" | "min" | "max"> & {
+  value: number;
+  min: number;
+  max: number;
+  onChange: (value: number) => void;
+};
+
+/**
+ * Number box you can clear and retype: values in range apply as you type, anything else
+ * is clamped when you leave the field (or press Enter).
+ */
+export function NumberField({ value, min, max, onChange, className = "", ...props }: NumberFieldProps) {
+  const [draft, setDraft] = useState<string | null>(null);
+  return (
+    <input
+      type="number"
+      inputMode="numeric"
+      min={min}
+      max={max}
+      value={draft ?? value}
+      onChange={(e) => {
+        setDraft(e.target.value);
+        const next = Number(e.target.value);
+        if (e.target.value !== "" && next >= min && next <= max) onChange(next);
+      }}
+      onBlur={() => {
+        if (draft !== null && draft !== "" && !Number.isNaN(Number(draft))) onChange(clamp(Math.round(Number(draft)), min, max));
+        setDraft(null);
+      }}
+      onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
+      // 16px on phones: iOS zooms into any smaller input on focus
+      className={`h-10 rounded-lg border border-border-strong bg-surface-alt text-center text-base text-ink sm:h-8 sm:text-sm [appearance:textfield] disabled:opacity-50 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none ${className}`}
+      {...props}
+    />
   );
 }

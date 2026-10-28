@@ -19,6 +19,11 @@ describe("gifArgs", () => {
     ]);
   });
 
+  it("crops before everything else, so the GIF is made from the cropped picture", () => {
+    const crop = { x: 32, y: 8, width: 64, height: 48 };
+    expect(gifArgs("i", "o", { start: 0, end: 1, fps: 10, colors: 256, width: 64, crop })[9]).toMatch(/^crop=64:48:32:8,fps=10,scale=64:-1:/);
+  });
+
   it("frameCount: GIF frames in a selection (used for progress)", () => {
     expect(frameCount({ start: 1, end: 3, fps: 10 })).toBe(20);
     expect(frameCount({ start: 0, end: 0.01, fps: 10 })).toBe(1);

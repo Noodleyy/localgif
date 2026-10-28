@@ -9,13 +9,14 @@ type VideoPreviewProps = {
   videoUrl: string;
   status: VideoStatus;
   converterLoad: number | null; // 0..1 while the converter downloads
+  overlay?: React.ReactNode; // drawn over the picture (the crop frame)
   className?: string;
 } & Pick<React.VideoHTMLAttributes<HTMLVideoElement>, "onLoadedMetadata" | "onError" | "onTimeUpdate" | "onPlay" | "onPause" | "onEnded">;
 
 const MESSAGES = {
   "no-preview": {
     title: "Your browser can't preview this format",
-    body: "You can still trim by time and convert it to a GIF.",
+    body: "You can still trim, crop and convert it to a GIF.",
   },
   error: {
     title: "Couldn't read this file",
@@ -23,7 +24,7 @@ const MESSAGES = {
   },
 };
 
-export function VideoPreview({ videoRef, videoUrl, status, converterLoad, className = "", ...events }: VideoPreviewProps) {
+export function VideoPreview({ videoRef, videoUrl, status, converterLoad, overlay, className = "", ...events }: VideoPreviewProps) {
   const [isMuted, setIsMuted] = useState(false);
   const isReady = status === "ready";
   const message = status === "no-preview" || status === "error" ? MESSAGES[status] : null;
@@ -70,7 +71,9 @@ export function VideoPreview({ videoRef, videoUrl, status, converterLoad, classN
         </div>
       )}
 
-      {isReady && (
+      {overlay}
+
+      {isReady && !overlay && (
         <div className="absolute right-3 bottom-3">
           <IconButton
             icon={isMuted ? "speakerOff" : "speaker"}

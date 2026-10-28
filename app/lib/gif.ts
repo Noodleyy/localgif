@@ -1,4 +1,5 @@
 // No React in here, so the tests can run it in Node against the same ffmpeg.wasm build.
+import type { Crop } from "./crop";
 import { MEMORY_LIMIT_MB } from "./memory";
 import { clamp } from "./time";
 
@@ -31,7 +32,8 @@ export type GifOptions = {
   end: number;
   fps: number;
   colors: number;
-  width: number; // height follows the aspect ratio
+  crop?: Crop; // the part of the frame to keep (default: all of it)
+  width: number; // of the GIF; the height follows the (cropped) aspect ratio
 };
 
 export function fileExtension(fileName: string): string {
@@ -64,8 +66,9 @@ async function withMountedFile<T>(ffmpeg: FFmpegLike, file: File, read: (path: s
 const FRAME_LOG = /\bn:\s*\d+\s+pts:/;
 
 export function gifArgs(input: string, output: string, o: GifOptions): string[] {
+  const crop = o.crop ? `crop=${o.crop.width}:${o.crop.height}:${o.crop.x}:${o.crop.y},` : "";
   const filter =
-    `fps=${clampFps(o.fps)},scale=${o.width}:-1:flags=lanczos,showinfo=checksum=0,split[s0][s1];` +
+    `${crop}fps=${clampFps(o.fps)},scale=${o.width}:-1:flags=lanczos,showinfo=checksum=0,split[s0][s1];` +
     `[s0]palettegen=max_colors=${clampColors(o.colors)}[p];[s1][p]paletteuse,showinfo=checksum=0`;
   return [
     // the log level is global in ffmpeg.wasm: an earlier `ffprobe -v error` would hide the showinfo lines

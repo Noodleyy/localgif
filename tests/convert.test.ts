@@ -24,6 +24,11 @@ async function setup() {
       "-filter_complex", "color=red:s=64x48:r=10:d=1[a];color=blue:s=64x48:r=10:d=1[b];[a][b]concat=n=2",
       ...x264,
     ]),
+    // red left half, blue right half: shows *where* the crop was taken
+    redLeftBlueRight: await makeVideo(gen, "red-left-blue-right.mp4", [
+      "-filter_complex", "color=red:s=32x48:r=10:d=1[a];color=blue:s=32x48:r=10:d=1[b];[a][b]hstack",
+      ...x264,
+    ]),
     fps60: await makeVideo(gen, "fps60.mp4", ["-f", "lavfi", "-i", "testsrc=size=160x120:rate=60:duration=1", ...x264]),
     // committed: ffmpeg.wasm can decode HEVC but not encode it
     hevc: new File([readFileSync(new URL("./fixtures/hevc-320x240-25fps-2s.mp4", import.meta.url))], "hevc.mp4"),
@@ -91,6 +96,21 @@ describe("small videos", () => {
     const second = await convert(videos.redThenBlue, opts({ start: 1.2, end: 1.8, width: 64 }));
     expect(second.palette.some(isBlue)).toBe(true);
     expect(second.palette.some(isRed)).toBe(false);
+  });
+
+  it("crops to the selected part of the frame", async () => {
+    const isRed = (c: { r: number; b: number }) => c.r > 200 && c.b < 60;
+    const isBlue = (c: { r: number; b: number }) => c.b > 200 && c.r < 60;
+
+    const right = await convert(videos.redLeftBlueRight, opts({ end: 1, crop: { x: 36, y: 8, width: 24, height: 32 }, width: 24 }));
+    expect(right).toMatchObject({ width: 24, height: 32 });
+    expect(right.palette.some(isBlue)).toBe(true);
+    expect(right.palette.some(isRed)).toBe(false);
+
+    const left = await convert(videos.redLeftBlueRight, opts({ end: 1, crop: { x: 0, y: 0, width: 16, height: 48 }, width: 32 }));
+    expect(left).toMatchObject({ width: 32, height: 96 }); // scaled 2x after cropping
+    expect(left.palette.some(isRed)).toBe(true);
+    expect(left.palette.some(isBlue)).toBe(false);
   });
 
   it("handles a selection shorter than one GIF frame", async () => {
