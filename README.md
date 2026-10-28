@@ -166,6 +166,8 @@ dialog converting/ready/failed, phone width) plus manual checks. Things to keep 
 - **Crop**: the frame over the preview is pointer-only (`aria-hidden`); the Crop card's shape choices
   (real radio buttons) and X / Y / Width / Height fields do everything it does, without dragging
   (WCAG 2.5.7).
+- **Convert stays enabled while converting** (the page is inert behind the dialog anyway): a disabled
+  button loses focus, and then the dialog has nothing to return focus to.
 - **Dialog**: a native modal `<dialog>`, so the browser makes the page behind inert, keeps Tab inside
   it (and the browser's own controls) and returns focus to where it was on close. Focus moves to
   Download / Close when there's an outcome. Escape closes it, or cancels a running conversion.

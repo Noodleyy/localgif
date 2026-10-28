@@ -153,9 +153,11 @@ export default function Page() {
 
               <div className="sticky bottom-0 z-10 -mx-4 border-t border-border bg-bg/90 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur sm:bottom-[max(1rem,env(safe-area-inset-bottom))] sm:mx-0 sm:rounded-xl sm:border sm:bg-surface/90 sm:p-3 sm:shadow-lg lg:static lg:rounded-none lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none lg:backdrop-blur-none">
                 <div {...loadProps} className={`flex gap-2 sm:justify-center ${loadState}`}>
+                  {/* not disabled while converting: the dialog returns focus here, and a disabled
+                      button would have lost it (the page behind the dialog is inert anyway) */}
                   <button
                     onClick={convert}
-                    disabled={conversion.busy || !canConvert}
+                    disabled={!canConvert}
                     className={`min-w-0 flex-1 rounded-lg border border-transparent bg-primary py-3 font-medium text-ink enabled:hover:bg-primary-hover enabled:hover:shadow-[0_8px_24px_-8px_rgb(124_58_237/0.8)] disabled:cursor-not-allowed disabled:opacity-50 sm:w-64 sm:flex-none lg:flex-1 lg:py-2.5 ${lift}`}
                   >
                     {conversion.busy ? "Converting..." : "Convert to GIF"}
