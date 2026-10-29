@@ -243,6 +243,16 @@ describe("formats browsers can't preview still convert", () => {
 });
 
 describe("GIF timing", () => {
+  it("slow motion makes the GIF longer, with more frames; sped up, shorter", async () => {
+    const slow = await convert(videos.small, opts({ end: 1, width: 160, speed: 0.5 }));
+    expect(slow.frames).toBe(20);
+    expect(slow.durationSec).toBeCloseTo(2, 1);
+    const fast = await convert(videos.small, opts({ end: 1, width: 160, speed: 2 }));
+    expect(fast.frames).toBe(5);
+    expect(fast.durationSec).toBeCloseTo(0.5, 1);
+  });
+
+
   it("never writes frames shorter than 2/100 s (browsers would slow those down to 1/10 s)", async () => {
     const gif = await convert(videos.fps60, opts({ end: 1, fps: 60, width: 160 }));
     expect(gif.minDelayCs).toBeGreaterThanOrEqual(2);

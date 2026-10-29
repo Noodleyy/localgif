@@ -111,3 +111,31 @@ export function NumberField({ value, min, max, onChange, className = "", ...prop
     />
   );
 }
+
+type ChoicesProps<T extends string | number> = {
+  legend: string; // for screen readers; the options say the rest
+  options: readonly { value: T; label: string }[];
+  value: T;
+  onChange: (value: T) => void;
+};
+
+/** A row of chips that work as radio buttons (arrow keys move between them). */
+export function Choices<T extends string | number>({ legend, options, value, onChange }: ChoicesProps<T>) {
+  const groupId = useId();
+  return (
+    <fieldset>
+      <legend className="sr-only">{legend}</legend>
+      <div className="flex flex-wrap gap-2">
+        {options.map((option) => (
+          <label
+            key={option.value}
+            className="cursor-pointer rounded-lg border border-border-strong bg-surface-alt px-3 py-1.5 text-ink tabular-nums transition-colors hover:bg-surface-hover has-checked:border-primary has-checked:bg-primary has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-primary-soft"
+          >
+            <input type="radio" name={groupId} className="sr-only" checked={value === option.value} onChange={() => onChange(option.value)} />
+            <span>{option.label}</span>
+          </label>
+        ))}
+      </div>
+    </fieldset>
+  );
+}

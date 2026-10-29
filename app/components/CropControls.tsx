@@ -1,6 +1,6 @@
 import { useId } from "react";
 import { ASPECTS, MIN_CROP, centeredCrop, setCropField, type Crop, type Size } from "../lib/crop";
-import { NumberField } from "./ui";
+import { Choices, NumberField } from "./ui";
 
 type CropControlsProps = {
   frame: Size;
@@ -8,6 +8,8 @@ type CropControlsProps = {
   aspect: string; // "Full" or a key of ASPECTS
   onChange: (crop: Crop | null, aspect: string) => void;
 };
+
+const SHAPES = ["Full", ...Object.keys(ASPECTS)].map((shape) => ({ value: shape, label: shape }));
 
 const FIELDS = [
   { key: "x", label: "X" },
@@ -30,20 +32,7 @@ export function CropControls({ frame, crop, aspect, onChange }: CropControlsProp
 
   return (
     <div className="flex flex-col gap-4 text-sm">
-      <fieldset>
-        <legend className="sr-only">Crop shape</legend>
-        <div className="flex flex-wrap gap-2">
-          {["Full", ...Object.keys(ASPECTS)].map((option) => (
-            <label
-              key={option}
-              className="cursor-pointer rounded-lg border border-border-strong bg-surface-alt px-3 py-1.5 text-ink transition-colors hover:bg-surface-hover has-checked:border-primary has-checked:bg-primary has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-primary-soft"
-            >
-              <input type="radio" name={id} className="sr-only" checked={aspect === option} onChange={() => pick(option)} />
-              <span>{option}</span>
-            </label>
-          ))}
-        </div>
-      </fieldset>
+      <Choices legend="Crop shape" options={SHAPES} value={aspect} onChange={pick} />
 
       <div className="grid grid-cols-2 gap-3 tabular-nums sm:grid-cols-4">
         {FIELDS.map(({ key, label }) => (

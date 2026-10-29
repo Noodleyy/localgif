@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fileExtension, frameCount, gifArgs, maxOutputFps, parseFrameRate } from "../app/lib/gif";
+import { fileExtension, frameCount, gifArgs, gifDuration, maxOutputFps, parseFrameRate } from "../app/lib/gif";
 import { estimateConversionRisk } from "../app/lib/memory";
 import { formatBytes, formatSeconds, formatTimecode } from "../app/lib/format";
 import { stepFrame } from "../app/lib/time";
@@ -22,6 +22,23 @@ describe("gifArgs", () => {
   it("crops before everything else, so the GIF is made from the cropped picture", () => {
     const crop = { x: 32, y: 8, width: 64, height: 48 };
     expect(gifArgs("i", "o", { start: 0, end: 1, fps: 10, colors: 256, width: 64, crop })[9]).toMatch(/^crop=64:48:32:8,fps=10,scale=64:-1:/);
+  });
+
+  it("changes the speed after cropping and before picking frames (no filter at 1x)", () => {
+    const at = (speed: number) => gifArgs("i", "o", { start: 0, end: 1, fps: 10, colors: 256, width: 64, speed })[9];
+    expect(at(0.5)).toMatch(/^setpts=PTS\/0.5,fps=10,/);
+    expect(at(2)).toMatch(/^setpts=PTS\/2,fps=10,/);
+    expect(at(1)).toMatch(/^fps=10,/);
+    const crop = { x: 0, y: 0, width: 32, height: 32 };
+    expect(gifArgs("i", "o", { start: 0, end: 1, fps: 10, colors: 256, width: 32, crop, speed: 0.5 })[9]).toMatch(/^crop=[^,]+,setpts=PTS\/0.5,fps=/);
+  });
+
+  it("gifDuration and frameCount follow the speed", () => {
+    expect(gifDuration({ start: 1, end: 3 })).toBe(2);
+    expect(gifDuration({ start: 1, end: 3, speed: 0.5 })).toBe(4);
+    expect(gifDuration({ start: 1, end: 3, speed: 2 })).toBe(1);
+    expect(frameCount({ start: 0, end: 1, fps: 10, speed: 0.25 })).toBe(40);
+    expect(frameCount({ start: 0, end: 1, fps: 10, speed: 2 })).toBe(5);
   });
 
   it("frameCount: GIF frames in a selection (used for progress)", () => {

@@ -6,6 +6,7 @@ import { DEFAULT_FPS, MAX_GIF_FPS, maxOutputFps } from "./lib/gif";
 import { estimateConversionRisk } from "./lib/memory";
 import { loadSettings, saveSettings } from "./lib/settings";
 import { ClipControls } from "./components/ClipControls";
+import { SpeedControls } from "./components/SpeedControls";
 import { CropControls } from "./components/CropControls";
 import { CropOverlay } from "./components/CropOverlay";
 import { Footer } from "./components/Footer";
@@ -31,13 +32,15 @@ export default function Page() {
   const [trim, setTrim] = useState<Trim>({ start: 0, end: 0 });
   const [crop, setCrop] = useState<Crop | null>(null); // null: the whole frame
   const [aspect, setAspect] = useState("Full");
+  const [speed, setSpeed] = useState(1);
   const source = useVideoSource((meta) => setTrim({ start: 0, end: meta.duration }));
   const playback = usePlayback(videoRef, { trim, setTrim, duration: source.meta?.duration ?? 0, fps: source.fps ?? DEFAULT_FPS });
   const conversion = useConversion();
 
   // read during hydration on purpose: the settings aren't in the HTML until a video is loaded
   const [settings, setSettings] = useState<Settings>(() => ({ fps: 10, colors: 256, ...loadSettings(), scale: 1 }));
-  const maxFps = source.fps === null ? null : maxOutputFps(source.fps);
+  // more FPS than the video has frames (at this speed) would only repeat frames
+  const maxFps = source.fps === null ? null : maxOutputFps(source.fps * speed);
   const output = { ...settings, fps: Math.min(settings.fps, maxFps ?? MAX_GIF_FPS) }; // the saved FPS, capped to this video's
 
   function selectFile(file: File) {
@@ -45,6 +48,7 @@ export default function Page() {
     playback.reset();
     conversion.reset();
     changeCrop(null, "Full");
+    setSpeed(1);
     setSettings((s) => ({ ...s, scale: 1 }));
   }
 
@@ -75,7 +79,7 @@ export default function Page() {
   function convert() {
     if (!source.file || !canConvert) return;
     const { fps, colors } = output;
-    conversion.convert(source.file, { ...trim, fps, colors, crop: crop ?? undefined, width: outputSize.width }, outputSize);
+    conversion.convert(source.file, { ...trim, fps, colors, crop: crop ?? undefined, speed, width: outputSize.width }, outputSize);
   }
 
   return (
@@ -98,6 +102,7 @@ export default function Page() {
                 videoUrl={source.url}
                 status={source.status}
                 converterLoad={conversion.converterLoad}
+                playbackRate={speed}
                 overlay={
                   crop && source.meta && source.status !== "loading" ? (
                     <CropOverlay frame={source.meta} crop={crop} ratio={ASPECTS[aspect] ?? null} videoRef={videoRef} onChange={setCrop} />
@@ -128,6 +133,12 @@ export default function Page() {
             )}
 
             {meta && (
+              <Card title="Speed" {...loadProps} className={`rise gap-4 ${loadState}`}>
+                <SpeedControls speed={speed} clipDuration={trim.end - trim.start} onChange={setSpeed} />
+              </Card>
+            )}
+
+            {meta && (
               <Card title="Crop" {...loadProps} className={`rise gap-4 ${loadState}`}>
                 <CropControls frame={meta} crop={crop} aspect={aspect} onChange={changeCrop} />
               </Card>
@@ -144,7 +155,7 @@ export default function Page() {
                     clipDuration: trim.end - trim.start,
                     sourceWidth: meta.width,
                     sourceHeight: meta.height,
-                    outputFps: output.fps,
+                    outputFps: output.fps / speed, // GIF frames per second of video
                     outputWidth: outputSize.width,
                     outputHeight: outputSize.height,
                   })}

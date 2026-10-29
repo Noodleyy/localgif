@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Icon } from "./icons";
 import { IconButton, Percent } from "./ui";
 
@@ -10,6 +10,7 @@ type VideoPreviewProps = {
   status: VideoStatus;
   converterLoad: number | null; // 0..1 while the converter downloads
   overlay?: React.ReactNode; // drawn over the picture (the crop frame)
+  playbackRate?: number; // the GIF's speed, so the preview shows it
   className?: string;
 } & Pick<React.VideoHTMLAttributes<HTMLVideoElement>, "onLoadedMetadata" | "onError" | "onTimeUpdate" | "onPlay" | "onPause" | "onEnded">;
 
@@ -24,8 +25,14 @@ const MESSAGES = {
   },
 };
 
-export function VideoPreview({ videoRef, videoUrl, status, converterLoad, overlay, className = "", ...events }: VideoPreviewProps) {
+export function VideoPreview({ videoRef, videoUrl, status, converterLoad, overlay, playbackRate = 1, className = "", ...events }: VideoPreviewProps) {
   const [isMuted, setIsMuted] = useState(false);
+
+  // the default rate too: loading a new video resets playbackRate to it
+  useEffect(() => {
+    const video = videoRef.current;
+    if (video) video.defaultPlaybackRate = video.playbackRate = playbackRate;
+  }, [videoRef, videoUrl, playbackRate]);
   const isReady = status === "ready";
   const message = status === "no-preview" || status === "error" ? MESSAGES[status] : null;
   const announcement = status === "loading" ? "Loading video" : message ? `${message.title}. ${message.body}` : "Video loaded";

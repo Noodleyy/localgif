@@ -83,6 +83,14 @@ first (`crop=w:h:x:y` before `fps` and `scale`), so the Size slider, the memory 
 all work with the cropped size. Formats the browser can't preview still get the frame, in the video's
 shape, just without a picture behind it.
 
+## Speed
+
+The Speed card plays the GIF slower (0.25×, 0.5×, 0.75×: slow motion) or faster (1.5×, 2×). ffmpeg
+stretches the timestamps (`setpts=PTS/speed`) after the crop and before `fps`, so frames are picked on
+the new timeline: 1 s of video at 0.5× and 10 fps becomes a 2 s GIF with 20 frames. The preview plays at
+the chosen speed too (`playbackRate`). The FPS limit follows it (a 30 fps video at 0.5× gives at most
+15 fps without repeating frames), and the memory estimate and progress count the GIF's own frames.
+
 ## Tests
 
 `tests/convert.test.ts` runs `convertToGif` against the **same ffmpeg.wasm build the browser downloads**
@@ -96,6 +104,7 @@ same 2 GiB memory limit. Test videos are generated on the fly with ffmpeg's buil
 | red-then-blue | the trim actually exports the *selected* part |
 | red left half, blue right half | the crop keeps the *selected* part of the frame, and scales after cropping |
 | portrait 360×640 @ 29.97 fps | orientation, fractional fps detection |
+| small at 0.5× and 2× | slow motion makes a longer GIF with more frames; sped up, shorter |
 | 60 fps | GIF frame delays never drop below 2/100 s (browsers slow those down) |
 | HEVC, AVI, live-recorded WebM | formats the browser can't preview (or has no duration) still probe and convert |
 | large 1080p, 5 s (~18 MB) | downscaled and full-resolution conversion |

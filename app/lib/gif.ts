@@ -33,6 +33,7 @@ export type GifOptions = {
   fps: number;
   colors: number;
   crop?: Crop; // the part of the frame to keep (default: all of it)
+  speed?: number; // 0.5 = half speed (slow motion), 2 = twice as fast (default 1)
   width: number; // of the GIF; the height follows the (cropped) aspect ratio
 };
 
@@ -67,8 +68,9 @@ const FRAME_LOG = /\bn:\s*\d+\s+pts:/;
 
 export function gifArgs(input: string, output: string, o: GifOptions): string[] {
   const crop = o.crop ? `crop=${o.crop.width}:${o.crop.height}:${o.crop.x}:${o.crop.y},` : "";
+  const speed = o.speed && o.speed !== 1 ? `setpts=PTS/${o.speed},` : ""; // before fps: it picks frames on the new timeline
   const filter =
-    `${crop}fps=${clampFps(o.fps)},scale=${o.width}:-1:flags=lanczos,showinfo=checksum=0,split[s0][s1];` +
+    `${crop}${speed}fps=${clampFps(o.fps)},scale=${o.width}:-1:flags=lanczos,showinfo=checksum=0,split[s0][s1];` +
     `[s0]palettegen=max_colors=${clampColors(o.colors)}[p];[s1][p]paletteuse,showinfo=checksum=0`;
   return [
     // the log level is global in ffmpeg.wasm: an earlier `ffprobe -v error` would hide the showinfo lines
@@ -82,8 +84,11 @@ export function gifArgs(input: string, output: string, o: GifOptions): string[] 
   ];
 }
 
-export function frameCount(o: Pick<GifOptions, "start" | "end" | "fps">) {
-  return Math.max(1, Math.ceil((o.end - o.start) * clampFps(o.fps)));
+/** How long the GIF plays: the trim, sped up or slowed down. */
+export const gifDuration = (o: Pick<GifOptions, "start" | "end" | "speed">) => (o.end - o.start) / (o.speed ?? 1);
+
+export function frameCount(o: Pick<GifOptions, "start" | "end" | "fps" | "speed">) {
+  return Math.max(1, Math.ceil(gifDuration(o) * clampFps(o.fps)));
 }
 
 export async function convertToGif(
