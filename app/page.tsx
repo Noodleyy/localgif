@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import { ASPECTS, type Crop } from "./lib/crop";
-import { DEFAULT_FPS, MAX_GIF_FPS, maxOutputFps } from "./lib/gif";
+import { DEFAULT_FPS, MAX_GIF_FPS, maxOutputFps, type GifOptions } from "./lib/gif";
 import { estimateConversionRisk } from "./lib/memory";
 import { loadSettings, saveSettings } from "./lib/settings";
 import { ClipControls } from "./components/ClipControls";
@@ -11,6 +11,7 @@ import { CropControls } from "./components/CropControls";
 import { CropOverlay } from "./components/CropOverlay";
 import { Footer } from "./components/Footer";
 import { GifResult } from "./components/GifResult";
+import { GifSize } from "./components/GifSize";
 import { MemoryMeter } from "./components/MemoryMeter";
 import { OutputSettings, type Settings } from "./components/OutputSettings";
 import type { Trim } from "./components/Timeline";
@@ -19,6 +20,7 @@ import { UploadBox } from "./components/UploadBox";
 import { VideoPreview } from "./components/VideoPreview";
 import { useConversion } from "./useConversion";
 import { usePlayback } from "./usePlayback";
+import { useSizeEstimate } from "./useSizeEstimate";
 import { useVideoSource, type VideoMeta } from "./useVideoSource";
 
 // what the skeleton cards are laid out with while the first video loads
@@ -75,11 +77,12 @@ export default function Page() {
     height: Math.max(1, Math.round(frame.height * output.scale)),
   };
   const canConvert = (source.status === "ready" || source.status === "no-preview") && trim.end - trim.start >= 0.01;
+  const gifOptions: GifOptions = { ...trim, fps: output.fps, colors: output.colors, crop: crop ?? undefined, speed, width: outputSize.width };
+  // waits for the frame rate: it decides the FPS limit, so the estimate would be redone
+  const size = useSizeEstimate(source.file, canConvert && source.fps !== null ? gifOptions : null, conversion.busy);
 
   function convert() {
-    if (!source.file || !canConvert) return;
-    const { fps, colors } = output;
-    conversion.convert(source.file, { ...trim, fps, colors, crop: crop ?? undefined, speed, width: outputSize.width }, outputSize);
+    if (source.file && canConvert) conversion.convert(source.file, gifOptions, outputSize);
   }
 
   return (
@@ -150,6 +153,7 @@ export default function Page() {
             <div className="contents lg:sticky lg:top-6 lg:flex lg:flex-col lg:gap-6 lg:self-start">
               <Card title="Output" {...loadProps} className={`rise gap-5 ${loadState}`}>
                 <OutputSettings settings={output} onChange={changeSettings} maxFps={maxFps} frame={frame} />
+                <GifSize bytes={size.bytes} current={size.current} />
                 <MemoryMeter
                   risk={estimateConversionRisk({
                     clipDuration: trim.end - trim.start,

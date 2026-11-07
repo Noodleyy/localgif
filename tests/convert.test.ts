@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { beforeAll, describe, expect, it } from "vitest";
-import { convertToGif, probeVideo, type GifOptions } from "../app/lib/gif";
+import { convertToGif, estimateGifBytes, gifParts, probeVideo, type GifOptions } from "../app/lib/gif";
 import { asFFmpeg, loadCore, makeVideo, parseGif } from "./helpers";
 
 const x264 = ["-pix_fmt", "yuv420p", "-c:v", "libx264", "-preset", "ultrafast"];
@@ -191,6 +191,49 @@ describe("progress", () => {
     const seen: number[] = [];
     await convertToGif(ffmpeg, videos.small, opts({ end: 1, width: 160 }), (p) => seen.push(p));
     expect(seen.length).toBeGreaterThan(10);
+  });
+});
+
+describe("size estimate", () => {
+  it("splits a GIF into its header and frames, byte for byte", async () => {
+    const gif = await convertToGif(ffmpeg, videos.small, opts({ end: 1, width: 160 }));
+    const { header, frames } = gifParts(gif);
+    expect(frames).toHaveLength(parseGif(gif).frames);
+    expect(header + frames.reduce((a, b) => a + b) + 1).toBe(gif.byteLength); // + the trailer
+  });
+
+  it("is exact for short clips (the sample is the whole GIF)", async () => {
+    const o = opts({ end: 1, width: 160 }); // 10 frames
+    expect(await estimateGifBytes(ffmpeg, videos.small, o)).toBe((await convertToGif(ffmpeg, videos.small, o)).byteLength);
+  });
+
+  it("is close for longer clips, also cropped, slowed down or with fewer colors", async () => {
+    const cases: [File, GifOptions][] = [
+      [videos.small, opts({ end: 2, fps: 15, width: 320 })],
+      [videos.portrait, opts({ end: 2, fps: 20, width: 180, colors: 32 })],
+      [videos.large, opts({ start: 1, end: 5, fps: 10, width: 480, crop: { x: 400, y: 100, width: 960, height: 720 } })],
+      [videos.small, opts({ end: 2, fps: 10, width: 240, speed: 0.5 })],
+    ];
+    for (const [file, o] of cases) {
+      const actual = (await convertToGif(ffmpeg, file, o)).byteLength;
+      const estimate = (await estimateGifBytes(ffmpeg, file, o))!;
+      expect(estimate / actual).toBeGreaterThan(0.8);
+      expect(estimate / actual).toBeLessThan(1.25);
+    }
+  }, 120_000);
+
+  it("stops early when asked", async () => {
+    expect(await estimateGifBytes(ffmpeg, videos.small, opts({ end: 2, width: 160 }), () => true)).toBeNull();
+  });
+
+  it("a conversion started during an estimate waits for it, so its progress stays clean", async () => {
+    const estimate = estimateGifBytes(ffmpeg, videos.small, opts({ end: 2, fps: 15, width: 320 }));
+    const seen: number[] = [];
+    const gif = await convertToGif(ffmpeg, videos.small, opts({ end: 1, width: 160 }), (p) => seen.push(p));
+    expect(await estimate).toBeGreaterThan(0);
+    expect(parseGif(gif).frames).toBe(10);
+    expect(seen.length).toBeLessThanOrEqual(10 * 2 + 1); // only its own frames, twice, and the final 1
+    expect(seen).toEqual([...seen].sort((a, b) => a - b));
   });
 });
 

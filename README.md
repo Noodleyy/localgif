@@ -58,6 +58,7 @@ app/
   useVideoSource.ts  the picked video: preview URL, size and length, frame rate (ffprobe)
   usePlayback.ts     the preview: plays in a loop between the trim points, frame steps
   useConversion.ts   one conversion at a time: start, cancel, progress, the last GIF ("View GIF")
+  useSizeEstimate.ts the estimated file size, redone shortly after the settings stop changing
   components/        presentational pieces (upload box, preview, timeline, settings, result dialog, footer);
                      ui.tsx and icons.tsx are the shared building blocks (buttons, bars, cards, icons)
 public/ffmpeg/       the converter and its worker, copied in at dev/build time (git-ignored)
@@ -91,6 +92,21 @@ the new timeline: 1 s of video at 0.5× and 10 fps becomes a 2 s GIF with 20 fra
 the chosen speed too (`playbackRate`). The FPS limit follows it (a 30 fps video at 0.5× gives at most
 15 fps without repeating frames), and the memory estimate and progress count the GIF's own frames.
 
+## File size estimate
+
+The Output card shows how big the GIF will be (`estimateGifBytes` in `app/lib/gif.ts`). It converts
+three samples of 5 frames (start, middle and end of the trim) with the real settings and scales up.
+A GIF's first frame is a whole picture and the others are mostly only what changed, so `gifParts`
+splits each sample into its header and frames and those are counted apart:
+`first frame + average later frame × (frames − 1)`. Clips of up to 15 frames are converted whole, so
+there it's exact. Against full conversions it came out within ±8% (testsrc, Mandelbrot zoom, grainy
+noise, Game of Life; 480–1920 px; 10–24 fps).
+
+A sample takes about 1–9 s (most of it the palette step on big frames), so it runs 0.5 s after the
+settings stop changing, shows a shimmer meanwhile, and gives way to a conversion: ffmpeg jobs run one at
+a time (`exclusive`), and Convert stops the estimate after its current sample, so the progress bar
+only counts the conversion's own frames.
+
 ## Tests
 
 `tests/convert.test.ts` runs `convertToGif` against the **same ffmpeg.wasm build the browser downloads**
@@ -110,8 +126,9 @@ same 2 GiB memory limit. Test videos are generated on the fly with ffmpeg's buil
 | large 1080p, 5 s (~18 MB) | downscaled and full-resolution conversion |
 | huge 1080p, 50 s (~180 MB) | seeking deep into a big file; repeated conversions don't leak memory |
 
-Plus failure cases (non-video input, a trim past the end, an empty trim, recovery afterwards), odd file
-names, and progress reporting. The Node tests read input through emscripten's real `WORKERFS` code, like
+Plus the size estimate (exact for short clips, within 20% when cropped, slowed down or with fewer
+colors, and a conversion started during an estimate), failure cases (non-video input, a trim past the
+end, an empty trim, recovery afterwards), odd file names, and progress reporting. The Node tests read input through emscripten's real `WORKERFS` code, like
 the browser; only the byte source differs (browsers use `FileReaderSync`, which only exists in workers).
 
 ## Progress

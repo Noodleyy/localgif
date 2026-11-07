@@ -43,6 +43,14 @@ export function fileExtension(fileName: string): string {
 }
 
 let mountCount = 0;
+let queue: Promise<unknown> = Promise.resolve();
+
+/** One ffmpeg job at a time: a conversion mustn't count a size sample's log lines as its progress. */
+function exclusive<T>(job: () => Promise<T>): Promise<T> {
+  const result = queue.then(job, job);
+  queue = result.catch(() => {});
+  return result;
+}
 
 // WORKERFS lets ffmpeg read the file from disk in chunks instead of copying the whole
 // video into memory. A folder per call, so a probe and a conversion can't collide.
@@ -91,12 +99,11 @@ export function frameCount(o: Pick<GifOptions, "start" | "end" | "fps" | "speed"
   return Math.max(1, Math.ceil(gifDuration(o) * clampFps(o.fps)));
 }
 
-export async function convertToGif(
-  ffmpeg: FFmpegLike,
-  file: File,
-  options: GifOptions,
-  onProgress?: (fraction: number) => void
-): Promise<Uint8Array> {
+export function convertToGif(ffmpeg: FFmpegLike, file: File, options: GifOptions, onProgress?: (fraction: number) => void) {
+  return exclusive(() => convert(ffmpeg, file, options, onProgress));
+}
+
+async function convert(ffmpeg: FFmpegLike, file: File, options: GifOptions, onProgress?: (fraction: number) => void): Promise<Uint8Array> {
   if (!(options.end > options.start)) throw new Error("End time must be after start time");
 
   const output = "output.gif";
@@ -132,6 +139,63 @@ export async function convertToGif(
     ffmpeg.off("log", onLog);
     await ffmpeg.deleteFile(output).catch(() => {});
   }
+}
+
+/** A GIF's bytes split up: everything before the first frame, and each frame (with its extensions). */
+export function gifParts(gif: Uint8Array): { header: number; frames: number[] } {
+  const colorTable = (flags: number) => (flags & 0x80 ? 3 * (2 << (flags & 7)) : 0);
+  let i = 13 + colorTable(gif[10]);
+  const header = i;
+  const frames: number[] = [];
+  let frameStart = i;
+  while (i < gif.length && gif[i] !== 0x3b) {
+    const isImage = gif[i] === 0x2c;
+    i += isImage ? 10 + colorTable(gif[i + 9]) + 1 : 2; // image: descriptor, colors, LZW code size; extension: label
+    while (i < gif.length && gif[i] !== 0) i += gif[i] + 1; // data sub-blocks
+    i++;
+    if (isImage) {
+      frames.push(i - frameStart);
+      frameStart = i;
+    }
+  }
+  return { header, frames };
+}
+
+export const SAMPLE_FRAMES = 5;
+const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
+
+/**
+ * The GIF's size without converting all of it: converts three short samples (start, middle and end
+ * of the trim) and scales up. A GIF's first frame is a whole picture, the others mostly only
+ * what changed, so those are counted apart. Exact for clips of up to 3 samples' length.
+ */
+export function estimateGifBytes(ffmpeg: FFmpegLike, file: File, o: GifOptions, stopped = () => false): Promise<number | null> {
+  return exclusive(() =>
+    withMountedFile(ffmpeg, file, async (input) => {
+      const total = frameCount(o);
+      const whole = total <= SAMPLE_FRAMES * 3;
+      const span = ((SAMPLE_FRAMES / clampFps(o.fps)) * (o.speed ?? 1)) * 0.999; // seconds of video per sample
+      const starts = whole ? [o.start] : [0, 0.5, 1].map((k) => o.start + (o.end - o.start - span) * k);
+      const output = `sample${++mountCount}.gif`;
+      const samples = [];
+      try {
+        for (const start of starts) {
+          if (stopped()) return null;
+          const code = await ffmpeg.exec(gifArgs(input, output, { ...o, start, end: whole ? o.end : start + span }));
+          const gif = await ffmpeg.readFile(output);
+          if (code !== 0 || !(gif instanceof Uint8Array)) throw new Error(`FFmpeg failed (exit code ${code})`);
+          if (whole) return gif.byteLength;
+          samples.push(gifParts(gif));
+        }
+      } finally {
+        await ffmpeg.deleteFile(output).catch(() => {});
+      }
+      const later = samples.flatMap((s) => s.frames.slice(1));
+      const average = (xs: number[]) => sum(xs) / Math.max(1, xs.length);
+      const first = average(samples.map((s) => s.header + s.frames[0]));
+      return Math.round(first + average(later) * (total - 1) + 1); // + the trailer byte
+    })
+  );
 }
 
 /** ffprobe's r_frame_rate, e.g. "30000/1001" or "25". */
