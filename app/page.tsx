@@ -153,7 +153,7 @@ export default function Page() {
             <div className="contents lg:sticky lg:top-6 lg:flex lg:flex-col lg:gap-6 lg:self-start">
               <Card title="Output" {...loadProps} className={`rise gap-5 ${loadState}`}>
                 <OutputSettings settings={output} onChange={changeSettings} maxFps={maxFps} frame={frame} />
-                <GifSize bytes={size.bytes} current={size.current} />
+                <GifSize {...size} />
                 <MemoryMeter
                   risk={estimateConversionRisk({
                     clipDuration: trim.end - trim.start,

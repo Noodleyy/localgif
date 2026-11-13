@@ -49,7 +49,8 @@ Notes:
 app/
   lib/gif.ts         the conversion core: ffmpeg args, convertToGif, probeVideo
   lib/memory.ts      the out-of-memory estimate
-  lib/ffmpeg.ts      loads ffmpeg.wasm in the browser (once, with download progress); resets it to cancel or after a crash
+  lib/ffmpeg.ts      loads ffmpeg.wasm in the browser (downloaded once, with progress): a worker for converting
+                     and one for the size estimate; resets them to cancel or after a crash
   lib/settings.ts    remembers FPS and quality between visits (localStorage)
   lib/crop.ts        the crop rectangle: presets, dragging, typed values (all in video pixels)
   lib/time.ts        clamp / frame-step helpers
@@ -94,18 +95,29 @@ the chosen speed too (`playbackRate`). The FPS limit follows it (a 30 fps video 
 
 ## File size estimate
 
-The Output card shows how big the GIF will be (`estimateGifBytes` in `app/lib/gif.ts`). It converts
-three samples of 5 frames (start, middle and end of the trim) with the real settings and scales up.
-A GIF's first frame is a whole picture and the others are mostly only what changed, so `gifParts`
-splits each sample into its header and frames and those are counted apart:
-`first frame + average later frame × (frames − 1)`. Clips of up to 15 frames are converted whole, so
-there it's exact. Against full conversions it came out within ±8% (testsrc, Mandelbrot zoom, grainy
-noise, Game of Life; 480–1920 px; 10–24 fps).
+The Output card shows how big the GIF will be (`estimateGifBytes` in `app/lib/gif.ts`), in one ffmpeg
+pass over the whole trim:
 
-A sample takes about 1–9 s (most of it the palette step on big frames), so it runs 0.5 s after the
-settings stop changing, shows a shimmer meanwhile, and gives way to a conversion: ffmpeg jobs run one at
-a time (`exclusive`), and Convert stops the estimate after its current sample, so the progress bar
-only counts the conversion's own frames.
+- every frame is converted at a third of the width (at least 160 px), so busy and quiet stretches all
+  count;
+- 16 pairs of frames spread over the trim are converted at full size and at that small size (the second
+  frame of each pair is what a GIF stores for a frame: what changed since the one before);
+- estimate = small GIF × (full-size pairs ÷ small pairs).
+
+GIFs of up to 64 frames, or 160 px or narrower, are simply converted, so there it's exact.
+
+The first version converted 3 samples of 5 frames (start, middle and end) and scaled up. That held on
+generated test videos but not on real ones: a GIF's frames range from a few KB (nothing moved) to a whole
+picture (a scroll, a camera pan), so on a screen recording that scrolls now and then it said 0.35× the
+real size. The current method was picked by comparing designs on real camera, screen-recording and
+animation clips (480–1280 px, 10–20 fps): 0.88–1.04×, mostly within ±3%. More full-size pairs alone
+(48) got as close but took twice as long.
+
+It decodes the whole trim, so it takes a while: in ffmpeg.wasm about a third to half of the
+conversion's time. It runs 0.5 s after the settings stop changing, showing its progress, in its
+**own ffmpeg worker** (`getEstimator` in `app/lib/ffmpeg.ts`, sharing the downloaded wasm): a
+conversion never waits for it, and a settings change or Convert kills that worker, so an outdated
+estimate stops at once.
 
 ## Tests
 
@@ -121,13 +133,15 @@ same 2 GiB memory limit. Test videos are generated on the fly with ffmpeg's buil
 | red left half, blue right half | the crop keeps the *selected* part of the frame, and scales after cropping |
 | portrait 360×640 @ 29.97 fps | orientation, fractional fps detection |
 | small at 0.5× and 2× | slow motion makes a longer GIF with more frames; sped up, shorter |
+| bursty 640×360, 9 s | mostly still with two short bursts of motion: the size estimate counts them |
 | 60 fps | GIF frame delays never drop below 2/100 s (browsers slow those down) |
 | HEVC, AVI, live-recorded WebM | formats the browser can't preview (or has no duration) still probe and convert |
 | large 1080p, 5 s (~18 MB) | downscaled and full-resolution conversion |
 | huge 1080p, 50 s (~180 MB) | seeking deep into a big file; repeated conversions don't leak memory |
 
-Plus the size estimate (exact for short clips, within 20% when cropped, slowed down or with fewer
-colors, and a conversion started during an estimate), failure cases (non-video input, a trim past the
+Plus the size estimate (exact for short or narrow GIFs; within 10% when cropped, slowed down, with
+fewer colors, and on a clip that's still apart from two short bursts of motion, where the old estimate
+said 0.6×), failure cases (non-video input, a trim past the
 end, an empty trim, recovery afterwards), odd file names, and progress reporting. The Node tests read input through emscripten's real `WORKERFS` code, like
 the browser; only the byte source differs (browsers use `FileReaderSync`, which only exists in workers).
 

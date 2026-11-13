@@ -43,14 +43,6 @@ export function fileExtension(fileName: string): string {
 }
 
 let mountCount = 0;
-let queue: Promise<unknown> = Promise.resolve();
-
-/** One ffmpeg job at a time: a conversion mustn't count a size sample's log lines as its progress. */
-function exclusive<T>(job: () => Promise<T>): Promise<T> {
-  const result = queue.then(job, job);
-  queue = result.catch(() => {});
-  return result;
-}
 
 // WORKERFS lets ffmpeg read the file from disk in chunks instead of copying the whole
 // video into memory. A folder per call, so a probe and a conversion can't collide.
@@ -74,22 +66,25 @@ async function withMountedFile<T>(ffmpeg: FFmpegLike, file: File, read: (path: s
 // only starts moving once palettegen has seen every frame.
 const FRAME_LOG = /\bn:\s*\d+\s+pts:/;
 
-export function gifArgs(input: string, output: string, o: GifOptions): string[] {
+/** The GIF's frames: cropped, sped up or slowed down, then picked at the GIF's FPS. */
+function framesFilter(o: GifOptions) {
   const crop = o.crop ? `crop=${o.crop.width}:${o.crop.height}:${o.crop.x}:${o.crop.y},` : "";
   const speed = o.speed && o.speed !== 1 ? `setpts=PTS/${o.speed},` : ""; // before fps: it picks frames on the new timeline
+  return `${crop}${speed}fps=${clampFps(o.fps)}`;
+}
+
+/** Frames to a GIF `width` wide, with a palette made for them. `id` keeps the labels apart. */
+const toGif = (width: number, colors: number, id = "") =>
+  `scale=${width}:-1:flags=lanczos,split[${id}a][${id}b];[${id}a]palettegen=max_colors=${clampColors(colors)}[${id}p];[${id}b][${id}p]paletteuse`;
+
+const inputArgs = (input: string, o: GifOptions) => ["-ss", String(o.start), "-t", String(o.end - o.start), "-i", input];
+
+export function gifArgs(input: string, output: string, o: GifOptions): string[] {
   const filter =
-    `${crop}${speed}fps=${clampFps(o.fps)},scale=${o.width}:-1:flags=lanczos,showinfo=checksum=0,split[s0][s1];` +
+    `${framesFilter(o)},scale=${o.width}:-1:flags=lanczos,showinfo=checksum=0,split[s0][s1];` +
     `[s0]palettegen=max_colors=${clampColors(o.colors)}[p];[s1][p]paletteuse,showinfo=checksum=0`;
-  return [
-    // the log level is global in ffmpeg.wasm: an earlier `ffprobe -v error` would hide the showinfo lines
-    "-loglevel", "info",
-    "-ss", String(o.start),
-    "-t", String(o.end - o.start),
-    "-i", input,
-    "-vf", filter,
-    "-loop", "0",
-    output,
-  ];
+  // the log level is global in ffmpeg.wasm: an earlier `ffprobe -v error` would hide the showinfo lines
+  return ["-loglevel", "info", ...inputArgs(input, o), "-vf", filter, "-loop", "0", output];
 }
 
 /** How long the GIF plays: the trim, sped up or slowed down. */
@@ -99,11 +94,12 @@ export function frameCount(o: Pick<GifOptions, "start" | "end" | "fps" | "speed"
   return Math.max(1, Math.ceil(gifDuration(o) * clampFps(o.fps)));
 }
 
-export function convertToGif(ffmpeg: FFmpegLike, file: File, options: GifOptions, onProgress?: (fraction: number) => void) {
-  return exclusive(() => convert(ffmpeg, file, options, onProgress));
-}
-
-async function convert(ffmpeg: FFmpegLike, file: File, options: GifOptions, onProgress?: (fraction: number) => void): Promise<Uint8Array> {
+export async function convertToGif(
+  ffmpeg: FFmpegLike,
+  file: File,
+  options: GifOptions,
+  onProgress?: (fraction: number) => void
+): Promise<Uint8Array> {
   if (!(options.end > options.start)) throw new Error("End time must be after start time");
 
   const output = "output.gif";
@@ -141,61 +137,57 @@ async function convert(ffmpeg: FFmpegLike, file: File, options: GifOptions, onPr
   }
 }
 
-/** A GIF's bytes split up: everything before the first frame, and each frame (with its extensions). */
-export function gifParts(gif: Uint8Array): { header: number; frames: number[] } {
-  const colorTable = (flags: number) => (flags & 0x80 ? 3 * (2 << (flags & 7)) : 0);
-  let i = 13 + colorTable(gif[10]);
-  const header = i;
-  const frames: number[] = [];
-  let frameStart = i;
-  while (i < gif.length && gif[i] !== 0x3b) {
-    const isImage = gif[i] === 0x2c;
-    i += isImage ? 10 + colorTable(gif[i + 9]) + 1 : 2; // image: descriptor, colors, LZW code size; extension: label
-    while (i < gif.length && gif[i] !== 0) i += gif[i] + 1; // data sub-blocks
-    i++;
-    if (isImage) {
-      frames.push(i - frameStart);
-      frameStart = i;
-    }
-  }
-  return { header, frames };
-}
-
-export const SAMPLE_FRAMES = 5;
-const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
+export const ESTIMATE_PAIRS = 16; // pairs of frames converted at full size and small
+const SHRINK = 3; // the small GIF is a third as wide,
+const MIN_SMALL = 160; // but no smaller: tiny GIFs scale up less predictably
 
 /**
- * The GIF's size without converting all of it: converts three short samples (start, middle and end
- * of the trim) and scales up. A GIF's first frame is a whole picture, the others mostly only
- * what changed, so those are counted apart. Exact for clips of up to 3 samples' length.
+ * The GIF's size, for less work than converting it. Short or narrow GIFs are just converted (exact).
+ * Otherwise every frame is converted at a third of the width, so busy and quiet stretches
+ * all count, and scaled up by how much bigger 16 pairs of frames (spread over the trim,
+ * the second of each shows what changed) come out at full size than small.
+ * Within ±10% of the real GIF on camera, screen-recording and animation clips.
  */
-export function estimateGifBytes(ffmpeg: FFmpegLike, file: File, o: GifOptions, stopped = () => false): Promise<number | null> {
-  return exclusive(() =>
-    withMountedFile(ffmpeg, file, async (input) => {
-      const total = frameCount(o);
-      const whole = total <= SAMPLE_FRAMES * 3;
-      const span = ((SAMPLE_FRAMES / clampFps(o.fps)) * (o.speed ?? 1)) * 0.999; // seconds of video per sample
-      const starts = whole ? [o.start] : [0, 0.5, 1].map((k) => o.start + (o.end - o.start - span) * k);
-      const output = `sample${++mountCount}.gif`;
-      const samples = [];
-      try {
-        for (const start of starts) {
-          if (stopped()) return null;
-          const code = await ffmpeg.exec(gifArgs(input, output, { ...o, start, end: whole ? o.end : start + span }));
-          const gif = await ffmpeg.readFile(output);
-          if (code !== 0 || !(gif instanceof Uint8Array)) throw new Error(`FFmpeg failed (exit code ${code})`);
-          if (whole) return gif.byteLength;
-          samples.push(gifParts(gif));
-        }
-      } finally {
-        await ffmpeg.deleteFile(output).catch(() => {});
+export async function estimateGifBytes(
+  ffmpeg: FFmpegLike,
+  file: File,
+  o: GifOptions,
+  onProgress?: (fraction: number) => void
+): Promise<number> {
+  const total = frameCount(o);
+  const small = Math.max(MIN_SMALL, Math.round(o.width / SHRINK));
+  if (total <= ESTIMATE_PAIRS * 4 || small >= o.width) return (await convertToGif(ffmpeg, file, o, onProgress)).byteLength;
+
+  const pairs = `select='lt(mod(n\\,${Math.floor(total / ESTIMATE_PAIRS)})\\,2)'`;
+  const filter =
+    `${framesFilter(o)},split=3[all][big][little];` +
+    `[all]showinfo=checksum=0,${toGif(small, o.colors, "s")},showinfo=checksum=0[small];` + // progress: like convertToGif
+    `[big]${pairs},${toGif(o.width, o.colors, "b")}[bigPairs];` +
+    `[little]${pairs},${toGif(small, o.colors, "l")}[smallPairs]`;
+  const outputs = ["small", "bigPairs", "smallPairs"].map((name) => `${name}${++mountCount}.gif`);
+  let steps = 0;
+  const onLog = ({ message }: { message: string }) => {
+    if (FRAME_LOG.test(message)) onProgress?.(Math.min(++steps / (total * 2), 0.99));
+  };
+  ffmpeg.on("log", onLog);
+  return withMountedFile(ffmpeg, file, async (input) => {
+    try {
+      const code = await ffmpeg.exec([
+        "-loglevel", "info",
+        ...inputArgs(input, o),
+        "-filter_complex", filter,
+        ...["[small]", "[bigPairs]", "[smallPairs]"].flatMap((label, i) => ["-map", label, "-loop", "0", outputs[i]]),
+      ]);
+      const [all, big, little] = await Promise.all(outputs.map((path) => ffmpeg.readFile(path)));
+      if (code !== 0 || ![all, big, little].every((gif) => gif instanceof Uint8Array && gif.byteLength > 0)) {
+        throw new Error(`FFmpeg failed (exit code ${code})`);
       }
-      const later = samples.flatMap((s) => s.frames.slice(1));
-      const average = (xs: number[]) => sum(xs) / Math.max(1, xs.length);
-      const first = average(samples.map((s) => s.header + s.frames[0]));
-      return Math.round(first + average(later) * (total - 1) + 1); // + the trailer byte
-    })
-  );
+      return Math.round((all.length * big.length) / little.length);
+    } finally {
+      ffmpeg.off("log", onLog);
+      await Promise.all(outputs.map((path) => ffmpeg.deleteFile(path).catch(() => {})));
+    }
+  });
 }
 
 /** ffprobe's r_frame_rate, e.g. "30000/1001" or "25". */

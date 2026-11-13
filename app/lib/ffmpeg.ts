@@ -7,7 +7,6 @@ import type { FFmpeg } from "@ffmpeg/ffmpeg";
 const FFMPEG_DIR = `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/ffmpeg`;
 const WASM_BYTES = Number(process.env.NEXT_PUBLIC_FFMPEG_WASM_BYTES) || 0;
 
-let instance: Promise<FFmpeg> | null = null;
 let loadListener: ((fraction: number | null) => void) | null = null;
 
 /** Called with 0..1 while the converter downloads, and null when it's ready or failed. */
@@ -34,34 +33,56 @@ export async function fetchWithProgress(url: string, expectedBytes: number, onPr
   return new Blob(chunks, { type });
 }
 
-/** Loads ffmpeg.wasm once and reuses it. */
-export function getFFmpeg(): Promise<FFmpeg> {
-  instance ??= (async () => {
-    emitLoad(0);
-    const base = `${window.location.origin}${FFMPEG_DIR}`;
-    // fetched here rather than by the worker, to show the download's progress
-    const wasm = await fetchWithProgress(`${base}/core/ffmpeg-core.wasm`, WASM_BYTES, emitLoad, "application/wasm");
-    const { FFmpeg }: typeof import("@ffmpeg/ffmpeg") = await import(/* webpackIgnore: true */ `${base}/classes.js`);
-    const wasmURL = URL.createObjectURL(wasm);
+let wasmFile: Promise<Blob> | null = null; // downloaded once, for both workers
+
+async function load(): Promise<FFmpeg> {
+  const base = `${window.location.origin}${FFMPEG_DIR}`;
+  try {
+    if (!wasmFile) {
+      emitLoad(0);
+      // fetched here rather than by the worker, to show the download's progress
+      wasmFile = fetchWithProgress(`${base}/core/ffmpeg-core.wasm`, WASM_BYTES, emitLoad, "application/wasm")
+        .catch((err) => {
+          wasmFile = null;
+          throw err;
+        })
+        .finally(() => emitLoad(null));
+    }
+    const wasmURL = URL.createObjectURL(await wasmFile);
     try {
+      const { FFmpeg }: typeof import("@ffmpeg/ffmpeg") = await import(/* webpackIgnore: true */ `${base}/classes.js`);
       const ffmpeg = new FFmpeg();
       await ffmpeg.load({ classWorkerURL: `${base}/worker.js`, coreURL: `${base}/core/ffmpeg-core.js`, wasmURL });
       return ffmpeg;
     } finally {
       URL.revokeObjectURL(wasmURL);
     }
-  })()
-    .catch((err) => {
-      instance = null;
-      console.error(err);
-      throw new Error("Couldn't load the video converter (ffmpeg.wasm, ~30 MB). Check your internet connection and try again.");
-    })
-    .finally(() => emitLoad(null));
-  return instance;
+  } catch (err) {
+    console.error(err);
+    throw new Error("Couldn't load the video converter (ffmpeg.wasm, ~30 MB). Check your internet connection and try again.");
+  }
 }
 
-/** Kills the worker (to cancel, or after a crash); the next getFFmpeg() starts a fresh one. */
-export function resetFFmpeg() {
-  instance?.then((ffmpeg) => ffmpeg.terminate()).catch(() => {});
-  instance = null;
+/** An ffmpeg.wasm worker, loaded on first use and then reused. */
+function worker() {
+  let instance: Promise<FFmpeg> | null = null;
+  return {
+    get: () =>
+      (instance ??= load().catch((err) => {
+        instance = null;
+        throw err;
+      })),
+    /** Kills the worker (to stop it, or after a crash); the next get() starts a fresh one. */
+    reset() {
+      instance?.then((ffmpeg) => ffmpeg.terminate()).catch(() => {});
+      instance = null;
+    },
+  };
 }
+
+const converter = worker();
+// The size estimate has its own: a conversion never waits for it, and it can be stopped at once.
+const estimator = worker();
+
+export const { get: getFFmpeg, reset: resetFFmpeg } = converter;
+export const { get: getEstimator, reset: resetEstimator } = estimator;

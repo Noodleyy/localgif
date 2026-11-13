@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { beforeAll, describe, expect, it } from "vitest";
-import { convertToGif, estimateGifBytes, gifParts, probeVideo, type GifOptions } from "../app/lib/gif";
+import { ESTIMATE_PAIRS, convertToGif, estimateGifBytes, probeVideo, type GifOptions } from "../app/lib/gif";
 import { asFFmpeg, loadCore, makeVideo, parseGif } from "./helpers";
 
 const x264 = ["-pix_fmt", "yuv420p", "-c:v", "libx264", "-preset", "ultrafast"];
@@ -36,6 +36,12 @@ async function setup() {
     // like a browser screen recording: no duration in the file
     liveWebm: await makeVideo(gen, "live.webm", ["-f", "lavfi", "-i", "testsrc=size=320x240:rate=30:duration=2", "-c:v", "libvpx", "-deadline", "realtime", "-f", "webm", "-live", "1"]),
     portrait: await makeVideo(gen, "portrait.mp4", ["-f", "lavfi", "-i", "testsrc2=size=360x640:rate=30000/1001:duration=2", ...x264]),
+    // like a screen recording or a fixed camera: still (but slightly noisy), with two moments of
+    // motion at 2 s and 6.5 s, where the old 3-sample estimate didn't look (it said 0.6x)
+    bursty: await makeVideo(gen, "bursty.mp4", [
+      "-f", "lavfi", "-i", "testsrc2=size=640x360:rate=30:duration=1,loop=loop=59:size=1:start=0,loop=loop=119:size=1:start=74,loop=loop=59:size=1:start=207,setpts=N/30/TB,noise=alls=2:allf=t",
+      ...x264,
+    ]),
     large: await makeVideo(gen, "large.mp4", ["-f", "lavfi", "-i", "testsrc2=size=1920x1080:rate=30:duration=5", ...x264, "-crf", "10"]),
   };
   // ~180 MB: the large clip looped 10x without re-encoding
@@ -195,45 +201,35 @@ describe("progress", () => {
 });
 
 describe("size estimate", () => {
-  it("splits a GIF into its header and frames, byte for byte", async () => {
-    const gif = await convertToGif(ffmpeg, videos.small, opts({ end: 1, width: 160 }));
-    const { header, frames } = gifParts(gif);
-    expect(frames).toHaveLength(parseGif(gif).frames);
-    expect(header + frames.reduce((a, b) => a + b) + 1).toBe(gif.byteLength); // + the trailer
+  it("is exact for short or narrow GIFs (they're just converted)", async () => {
+    for (const o of [opts({ end: 1, width: 320 }), opts({ end: 2, fps: 30, width: 160 })]) {
+      expect(await estimateGifBytes(ffmpeg, videos.small, o)).toBe((await convertToGif(ffmpeg, videos.small, o)).byteLength);
+    }
   });
 
-  it("is exact for short clips (the sample is the whole GIF)", async () => {
-    const o = opts({ end: 1, width: 160 }); // 10 frames
-    expect(await estimateGifBytes(ffmpeg, videos.small, o)).toBe((await convertToGif(ffmpeg, videos.small, o)).byteLength);
-  });
-
-  it("is close for longer clips, also cropped, slowed down or with fewer colors", async () => {
+  it("is close for longer ones: bursts of motion, cropped, slowed down, fewer colors", async () => {
     const cases: [File, GifOptions][] = [
-      [videos.small, opts({ end: 2, fps: 15, width: 320 })],
-      [videos.portrait, opts({ end: 2, fps: 20, width: 180, colors: 32 })],
-      [videos.large, opts({ start: 1, end: 5, fps: 10, width: 480, crop: { x: 400, y: 100, width: 960, height: 720 } })],
-      [videos.small, opts({ end: 2, fps: 10, width: 240, speed: 0.5 })],
+      [videos.bursty, opts({ end: 8.9, fps: 10, width: 640 })],
+      [videos.bursty, opts({ end: 8.9, fps: 15, width: 480, colors: 32 })],
+      [videos.large, opts({ end: 5, fps: 15, width: 480, crop: { x: 400, y: 100, width: 960, height: 720 } })],
+      [videos.small, opts({ end: 2, fps: 20, width: 240, speed: 0.5 })],
     ];
     for (const [file, o] of cases) {
+      const frames = Math.round(((o.end - o.start) / (o.speed ?? 1)) * o.fps);
+      expect(frames).toBeGreaterThan(ESTIMATE_PAIRS * 4); // estimated, not converted
       const actual = (await convertToGif(ffmpeg, file, o)).byteLength;
-      const estimate = (await estimateGifBytes(ffmpeg, file, o))!;
-      expect(estimate / actual).toBeGreaterThan(0.8);
-      expect(estimate / actual).toBeLessThan(1.25);
+      const ratio = (await estimateGifBytes(ffmpeg, file, o)) / actual;
+      expect(ratio, `${file.name} ${JSON.stringify(o)}`).toBeGreaterThan(0.9);
+      expect(ratio, `${file.name} ${JSON.stringify(o)}`).toBeLessThan(1.1);
     }
-  }, 120_000);
+  }, 300_000);
 
-  it("stops early when asked", async () => {
-    expect(await estimateGifBytes(ffmpeg, videos.small, opts({ end: 2, width: 160 }), () => true)).toBeNull();
-  });
-
-  it("a conversion started during an estimate waits for it, so its progress stays clean", async () => {
-    const estimate = estimateGifBytes(ffmpeg, videos.small, opts({ end: 2, fps: 15, width: 320 }));
+  it("reports its progress", async () => {
     const seen: number[] = [];
-    const gif = await convertToGif(ffmpeg, videos.small, opts({ end: 1, width: 160 }), (p) => seen.push(p));
-    expect(await estimate).toBeGreaterThan(0);
-    expect(parseGif(gif).frames).toBe(10);
-    expect(seen.length).toBeLessThanOrEqual(10 * 2 + 1); // only its own frames, twice, and the final 1
+    await estimateGifBytes(ffmpeg, videos.bursty, opts({ end: 8.9, fps: 10, width: 640 }), (p) => seen.push(p));
     expect(seen).toEqual([...seen].sort((a, b) => a - b));
+    expect(seen.at(-1)).toBeGreaterThan(0.95);
+    expect(Math.max(...seen)).toBeLessThan(1);
   });
 });
 
