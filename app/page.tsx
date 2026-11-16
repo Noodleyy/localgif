@@ -1,13 +1,14 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { ASPECTS, type Crop } from "./lib/crop";
+import { ASPECTS, cropAt, editCrop, setKeyframe, type Crop, type Keyframe } from "./lib/crop";
 import { DEFAULT_FPS, MAX_GIF_FPS, maxOutputFps, type GifOptions } from "./lib/gif";
 import { estimateConversionRisk } from "./lib/memory";
 import { loadSettings, saveSettings } from "./lib/settings";
 import { ClipControls } from "./components/ClipControls";
 import { SpeedControls } from "./components/SpeedControls";
 import { CropControls } from "./components/CropControls";
+import { CropMotion } from "./components/CropMotion";
 import { CropOverlay } from "./components/CropOverlay";
 import { Footer } from "./components/Footer";
 import { GifResult } from "./components/GifResult";
@@ -34,6 +35,7 @@ export default function Page() {
   const [trim, setTrim] = useState<Trim>({ start: 0, end: 0 });
   const [crop, setCrop] = useState<Crop | null>(null); // null: the whole frame
   const [aspect, setAspect] = useState("Full");
+  const [keyframes, setKeyframes] = useState<Keyframe[]>([]); // where the crop moves to (none: it stays put)
   const [speed, setSpeed] = useState(1);
   const source = useVideoSource((meta) => setTrim({ start: 0, end: meta.duration }));
   const playback = usePlayback(videoRef, { trim, setTrim, duration: source.meta?.duration ?? 0, fps: source.fps ?? DEFAULT_FPS });
@@ -49,14 +51,39 @@ export default function Page() {
     source.select(file);
     playback.reset();
     conversion.reset();
-    changeCrop(null, "Full");
+    setCrop(null);
+    setAspect("Full");
+    setKeyframes([]);
     setSpeed(1);
     setSettings((s) => ({ ...s, scale: 1 }));
   }
 
   function changeCrop(next: Crop | null, nextAspect: string) {
+    // a new shape starts over; otherwise it's an edit of what the preview shows now
+    if (next && crop && nextAspect === aspect && source.meta) return editShownCrop(next);
     setCrop(next);
     setAspect(nextAspect);
+    setKeyframes([]);
+  }
+
+  function editShownCrop(next: Crop) {
+    if (!crop || !source.meta) return;
+    if (keyframes.length > 0) videoRef.current?.pause(); // a keyframe is set for the moment shown: keep it still
+    const edited = editCrop(crop, keyframes, playback.currentTime, next, source.meta);
+    setCrop(edited.crop);
+    setKeyframes(edited.keyframes);
+  }
+
+  function toggleMotion(on: boolean) {
+    if (!shownCrop) return;
+    setCrop(shownCrop); // turned off: it stays where it is now
+    setKeyframes(on ? setKeyframe([], playback.currentTime, shownCrop) : []);
+  }
+
+  function removeKeyframe(keyframe: Keyframe) {
+    const rest = keyframes.filter((k) => k !== keyframe);
+    if (rest.length === 0 && crop) setCrop(cropAt(crop, keyframes, playback.currentTime));
+    setKeyframes(rest);
   }
 
   function changeSettings(next: Settings) {
@@ -70,14 +97,15 @@ export default function Page() {
   const loadProps = { inert: isLoading, "aria-busy": isLoading };
   const loadState = isLoading ? "skeleton" : "reveal";
 
-  // what the GIF shows: the crop, or the whole frame
+  // what the GIF shows: the crop (where it is at the moment shown), or the whole frame
+  const shownCrop = crop && cropAt(crop, keyframes, playback.currentTime);
   const frame = crop ?? { width: meta?.width ?? 16, height: meta?.height ?? 9 };
   const outputSize = {
     width: Math.max(1, Math.round(frame.width * output.scale)),
     height: Math.max(1, Math.round(frame.height * output.scale)),
   };
   const canConvert = (source.status === "ready" || source.status === "no-preview") && trim.end - trim.start >= 0.01;
-  const gifOptions: GifOptions = { ...trim, fps: output.fps, colors: output.colors, crop: crop ?? undefined, speed, width: outputSize.width };
+  const gifOptions: GifOptions = { ...trim, fps: output.fps, colors: output.colors, crop: crop ?? undefined, cropKeyframes: keyframes.length ? keyframes : undefined, speed, width: outputSize.width };
   // waits for the frame rate: it decides the FPS limit, so the estimate would be redone
   const size = useSizeEstimate(source.file, canConvert && source.fps !== null ? gifOptions : null, conversion.busy);
 
@@ -107,8 +135,8 @@ export default function Page() {
                 converterLoad={conversion.converterLoad}
                 playbackRate={speed}
                 overlay={
-                  crop && source.meta && source.status !== "loading" ? (
-                    <CropOverlay frame={source.meta} crop={crop} ratio={ASPECTS[aspect] ?? null} videoRef={videoRef} onChange={setCrop} />
+                  shownCrop && source.meta && source.status !== "loading" ? (
+                    <CropOverlay frame={source.meta} crop={shownCrop} ratio={ASPECTS[aspect] ?? null} videoRef={videoRef} onChange={editShownCrop} />
                   ) : undefined
                 }
                 className="rise aspect-video w-full lg:max-h-[65vh]"
@@ -131,6 +159,7 @@ export default function Page() {
                   onTogglePlay={playback.togglePlay}
                   onStepFrame={playback.step}
                   onNudgeTrim={playback.nudgeTrim}
+                  markers={keyframes.map((k) => k.time)}
                 />
               </Card>
             )}
@@ -143,7 +172,16 @@ export default function Page() {
 
             {meta && (
               <Card title="Crop" {...loadProps} className={`rise gap-4 ${loadState}`}>
-                <CropControls frame={meta} crop={crop} aspect={aspect} onChange={changeCrop} />
+                <CropControls frame={meta} crop={shownCrop} aspect={aspect} onChange={changeCrop} />
+                <CropMotion
+                  keyframes={keyframes}
+                  time={playback.currentTime}
+                  disabled={crop === null}
+                  onToggle={toggleMotion}
+                  onAdd={() => shownCrop && setKeyframes(setKeyframe(keyframes, playback.currentTime, shownCrop))}
+                  onRemove={removeKeyframe}
+                  onSeek={playback.seek}
+                />
               </Card>
             )}
           </div>

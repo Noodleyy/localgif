@@ -12,9 +12,10 @@ type TimelineProps = {
   onSeek: (time: number) => void;
   onTrimChange: (trim: Trim) => void;
   onNudgeTrim: (edge: Edge, direction: 1 | -1) => void;
+  markers?: number[]; // diamonds at these times (the crop's keyframes; listed in the Crop card)
 };
 
-export function Timeline({ duration, currentTime, trim, onSeek, onTrimChange, onNudgeTrim }: TimelineProps) {
+export function Timeline({ duration, currentTime, trim, onSeek, onTrimChange, onNudgeTrim, markers = [] }: TimelineProps) {
   const trackRef = useRef<HTMLDivElement>(null);
   const [dragging, setDragging] = useState<Edge | null>(null);
 
@@ -103,6 +104,15 @@ export function Timeline({ duration, currentTime, trim, onSeek, onTrimChange, on
         className="absolute h-1.5 rounded-full bg-primary"
         style={{ left: `${startPct}%`, width: `${Math.max(endPct - startPct, 0)}%` }}
       />
+
+      {markers.map((time) => (
+        <div
+          key={time}
+          aria-hidden="true"
+          className="pointer-events-none absolute top-0 h-2 w-2 -translate-x-1/2 rotate-45 rounded-[1px] bg-primary-soft ring-1 ring-bg"
+          style={{ left: `${toPct(time)}%` }}
+        />
+      ))}
 
       <div
         className="pointer-events-none absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-ink shadow"

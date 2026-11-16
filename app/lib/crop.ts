@@ -76,3 +76,73 @@ export function setCropField(c: Crop, field: keyof Crop, value: number, src: Siz
 export function cornerPoint(c: Crop, handle: Exclude<Handle, "move">) {
   return { x: handle.endsWith("w") ? c.x : c.x + c.width, y: handle.startsWith("n") ? c.y : c.y + c.height };
 }
+
+/** Where the crop is at a moment of the video (in seconds); it glides between keyframes. */
+export type Keyframe = { time: number; x: number; y: number };
+
+/** Keyframes closer than this are the same one: dragging again on a frame replaces it. */
+export const KEYFRAME_SNAP = 0.02;
+
+/** The crop at `time`: in a straight line, at a steady speed, between the keyframes around it. */
+export function cropAt(crop: Crop, keyframes: Keyframe[], time: number): Crop {
+  if (keyframes.length === 0) return crop;
+  const next = keyframes.findIndex((k) => k.time > time);
+  if (next === 0) return { ...crop, x: keyframes[0].x, y: keyframes[0].y };
+  const a = keyframes[next === -1 ? keyframes.length - 1 : next - 1];
+  if (next === -1) return { ...crop, x: a.x, y: a.y };
+  const b = keyframes[next];
+  const f = (time - a.time) / (b.time - a.time);
+  return { ...crop, x: Math.round(a.x + (b.x - a.x) * f), y: Math.round(a.y + (b.y - a.y) * f) };
+}
+
+/** `keyframes` with the crop at `time` set to `at` (sorted; one close by is replaced). */
+export function setKeyframe(keyframes: Keyframe[], time: number, at: { x: number; y: number }): Keyframe[] {
+  const others = keyframes.filter((k) => Math.abs(k.time - time) >= KEYFRAME_SNAP);
+  return [...others, { time, x: at.x, y: at.y }].sort((a, b) => a.time - b.time);
+}
+
+/**
+ * A crop changed (dragged, or a field typed) while showing `time`. Moved: that moment gets a
+ * keyframe. Resized: every keyframe gets the same change, so the crop keeps one size throughout.
+ */
+export function editCrop(crop: Crop, keyframes: Keyframe[], time: number, next: Crop, src: Size) {
+  if (keyframes.length === 0) return { crop: next, keyframes };
+  const shown = cropAt(crop, keyframes, time);
+  if (next.width === shown.width && next.height === shown.height) {
+    return { crop: next, keyframes: setKeyframe(keyframes, time, next) };
+  }
+  const dx = next.x - shown.x;
+  const dy = next.y - shown.y;
+  return {
+    crop: next,
+    keyframes: keyframes.map((k) => {
+      const { x, y } = clampCrop({ ...next, x: k.x + dx, y: k.y + dy }, src);
+      return { time: k.time, x, y };
+    }),
+  };
+}
+
+/** ffmpeg expression for a value along keyframes (`t`: seconds since `start`, like the crop filter's). */
+function along(keyframes: Keyframe[], value: (k: Keyframe) => number, start: number) {
+  const n = (v: number) => {
+    const r = Math.round(v * 1000) / 1000;
+    return r < 0 ? `(${r})` : String(r);
+  };
+  const ks = keyframes.map((k) => ({ t: k.time - start, v: value(k) }));
+  if (ks.length === 1) return n(ks[0].v);
+  const t = `clip(t,${n(ks[0].t)},${n(ks.at(-1)!.t)})`; // held still before the first and after the last
+  let expr = n(ks.at(-1)!.v);
+  for (let i = ks.length - 2; i >= 0; i--) {
+    const [a, b] = [ks[i], ks[i + 1]];
+    if (b.t - a.t < 1e-6) continue;
+    expr = `if(lt(${t},${n(b.t)}),${n(a.v)}+${n(b.v - a.v)}*(${t}-${n(a.t)})/${n(b.t - a.t)},${expr})`;
+  }
+  return expr;
+}
+
+/** ffmpeg's crop filter: still, or moving along the keyframes (`start`: the trim's start, where t = 0). */
+export function cropFilter(crop: Crop, keyframes: Keyframe[] = [], start = 0) {
+  if (keyframes.length === 0) return `crop=${crop.width}:${crop.height}:${crop.x}:${crop.y}`;
+  // quoted, so the expressions' commas don't split the filter chain
+  return `crop=w=${crop.width}:h=${crop.height}:x='${along(keyframes, (k) => k.x, start)}':y='${along(keyframes, (k) => k.y, start)}'`;
+}

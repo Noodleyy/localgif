@@ -1,5 +1,5 @@
 // No React in here, so the tests can run it in Node against the same ffmpeg.wasm build.
-import type { Crop } from "./crop";
+import { cropFilter, type Crop, type Keyframe } from "./crop";
 import { MEMORY_LIMIT_MB } from "./memory";
 import { clamp } from "./time";
 
@@ -33,6 +33,7 @@ export type GifOptions = {
   fps: number;
   colors: number;
   crop?: Crop; // the part of the frame to keep (default: all of it)
+  cropKeyframes?: Keyframe[]; // where the crop moves to over time (seconds of video; default: it stays put)
   speed?: number; // 0.5 = half speed (slow motion), 2 = twice as fast (default 1)
   width: number; // of the GIF; the height follows the (cropped) aspect ratio
 };
@@ -68,7 +69,7 @@ const FRAME_LOG = /\bn:\s*\d+\s+pts:/;
 
 /** The GIF's frames: cropped, sped up or slowed down, then picked at the GIF's FPS. */
 function framesFilter(o: GifOptions) {
-  const crop = o.crop ? `crop=${o.crop.width}:${o.crop.height}:${o.crop.x}:${o.crop.y},` : "";
+  const crop = o.crop ? `${cropFilter(o.crop, o.cropKeyframes, o.start)},` : "";
   const speed = o.speed && o.speed !== 1 ? `setpts=PTS/${o.speed},` : ""; // before fps: it picks frames on the new timeline
   return `${crop}${speed}fps=${clampFps(o.fps)}`;
 }

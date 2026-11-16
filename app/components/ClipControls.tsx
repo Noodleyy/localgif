@@ -14,6 +14,7 @@ type ClipControlsProps = {
   onTogglePlay: () => void;
   onStepFrame: (direction: 1 | -1) => void;
   onNudgeTrim: (edge: "start" | "end", direction: 1 | -1) => void;
+  markers?: number[]; // the crop's keyframes
 };
 
 export function ClipControls(p: ClipControlsProps) {
@@ -26,6 +27,7 @@ export function ClipControls(p: ClipControlsProps) {
         onSeek={p.onSeek}
         onTrimChange={p.onTrimChange}
         onNudgeTrim={p.onNudgeTrim}
+        markers={p.markers}
       />
 
       <div className="flex items-center justify-center gap-3">

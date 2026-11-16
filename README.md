@@ -85,6 +85,24 @@ first (`crop=w:h:x:y` before `fps` and `scale`), so the Size slider, the memory 
 all work with the cropped size. Formats the browser can't preview still get the frame, in the video's
 shape, just without a picture behind it.
 
+### Moving crop
+
+Tick *Move the crop over time* and the crop gets keyframes (`Keyframe` in `app/lib/crop.ts`: a moment of
+the video and an X / Y). Go to another moment (the Trim card) and drag the frame or type X / Y: that
+moment gets a keyframe, and the crop glides between keyframes in a straight line at a steady speed,
+holding still before the first and after the last. So for "top left, slowly to bottom right": a
+keyframe at the start with the frame in the top left, one at the end with it in the bottom right.
+
+- The preview shows the crop where it is at the moment shown, also while playing, and X / Y show it
+  too. The keyframes are listed in the Crop card (jump to one, remove one) and marked on the timeline.
+- Moving sets a keyframe; resizing changes every keyframe alike, so the crop keeps one size (that's
+  also all ffmpeg's crop can do: its width and height are fixed, its x and y can follow time).
+- ffmpeg gets x and y as expressions of `t` (seconds since the trim's start, so the keyframes' video
+  times are shifted by it): `crop=w=640:h=360:x='if(lt(clip(t,0,4),4),0+640*(clip(t,0,4)-0)/4,640)':y=…`.
+  The crop comes before the speed change, so it follows the video's time either way.
+- Picking another shape starts over without keyframes; turning motion off keeps the crop where it is at
+  that moment.
+
 ## Speed
 
 The Speed card plays the GIF slower (0.25×, 0.5×, 0.75×: slow motion) or faster (1.5×, 2×). ffmpeg
@@ -130,7 +148,7 @@ same 2 GiB memory limit. Test videos are generated on the fly with ffmpeg's buil
 | tiny 64×48, 1 s | smallest case, looping, frame count |
 | small 320×240, 2 s, with audio | trim range, fps, scaling up/down, color limits, audio ignored |
 | red-then-blue | the trim actually exports the *selected* part |
-| red left half, blue right half | the crop keeps the *selected* part of the frame, and scales after cropping |
+| red left half, blue right half | the crop keeps the *selected* part of the frame, and scales after cropping; a moving crop starts red and ends blue (also at 0.5×) |
 | portrait 360×640 @ 29.97 fps | orientation, fractional fps detection |
 | small at 0.5× and 2× | slow motion makes a longer GIF with more frames; sped up, shorter |
 | bursty 640×360, 9 s | mostly still with two short bursts of motion: the size estimate counts them |

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MIN_CROP, centeredCrop, clampCrop, cornerPoint, dragCrop, setCropField, type Crop } from "../app/lib/crop";
+import { MIN_CROP, centeredCrop, clampCrop, cornerPoint, cropAt, cropFilter, dragCrop, editCrop, setCropField, setKeyframe, type Crop, type Keyframe } from "../app/lib/crop";
 
 const hd = { width: 1920, height: 1080 };
 const inside = (c: Crop, src = hd) => c.x >= 0 && c.y >= 0 && c.x + c.width <= src.width && c.y + c.height <= src.height;
@@ -88,5 +88,52 @@ describe("cornerPoint", () => {
       { x: 10, y: 70 },
       { x: 110, y: 70 },
     ]);
+  });
+});
+
+describe("keyframes", () => {
+  const crop: Crop = { x: 0, y: 0, width: 640, height: 360 };
+  const path: Keyframe[] = [
+    { time: 1, x: 0, y: 0 }, // top left
+    { time: 3, x: 1280, y: 720 }, // bottom right
+  ];
+
+  it("glides between keyframes at a steady speed, and holds before the first and after the last", () => {
+    expect(cropAt(crop, path, 0)).toMatchObject({ x: 0, y: 0 });
+    expect(cropAt(crop, path, 2)).toMatchObject({ x: 640, y: 360, width: 640, height: 360 });
+    expect(cropAt(crop, path, 2.5)).toMatchObject({ x: 960, y: 540 });
+    expect(cropAt(crop, path, 9)).toMatchObject({ x: 1280, y: 720 });
+    expect(cropAt({ ...crop, x: 7 }, [], 2)).toMatchObject({ x: 7 }); // none: the crop itself
+  });
+
+  it("setKeyframe keeps them in order, and replaces one on (nearly) the same moment", () => {
+    expect(setKeyframe(path, 2, { x: 5, y: 5 }).map((k) => k.time)).toEqual([1, 2, 3]);
+    expect(setKeyframe(path, 3.01, { x: 5, y: 6 })).toEqual([path[0], { time: 3.01, x: 5, y: 6 }]);
+  });
+
+  it("editCrop: moving sets the shown moment; resizing changes every keyframe alike", () => {
+    const moved = editCrop(crop, path, 2, { ...crop, x: 100, y: 50 }, hd);
+    expect(moved.keyframes).toEqual([path[0], { time: 2, x: 100, y: 50 }, path[1]]);
+
+    // from the bottom-right corner at t=2 (x 640, y 360), 100 px smaller: every keyframe keeps its top-left
+    const resized = editCrop(crop, path, 2, { x: 640, y: 360, width: 540, height: 260 }, hd);
+    expect(resized.crop).toMatchObject({ width: 540, height: 260 });
+    expect(resized.keyframes).toEqual(path);
+    // from the top-left corner: every keyframe moves by the same 100 px, kept inside the frame
+    const fromTopLeft = editCrop(crop, path, 2, { x: 740, y: 460, width: 540, height: 260 }, hd);
+    expect(fromTopLeft.keyframes).toEqual([
+      { time: 1, x: 100, y: 100 },
+      { time: 3, x: 1380, y: 820 },
+    ]);
+    expect(editCrop(crop, [], 2, { ...crop, x: 9 }, hd)).toEqual({ crop: { ...crop, x: 9 }, keyframes: [] });
+  });
+
+  it("cropFilter: a still crop, or x and y as expressions of t (seconds since the trim's start)", () => {
+    expect(cropFilter(crop)).toBe("crop=640:360:0:0");
+    const moving = cropFilter(crop, path, 0.5);
+    expect(moving).toMatch(/^crop=w=640:h=360:x='[^']+':y='[^']+'$/);
+    expect(moving).toContain("clip(t,0.5,2.5)"); // keyframes at 1 s and 3 s of video = 0.5 s and 2.5 s into the trim
+    expect(cropFilter(crop, [{ time: 2, x: 3, y: 4 }])).toBe("crop=w=640:h=360:x='3':y='4'");
+    expect(cropFilter(crop, path, 2)).toContain("(-1)"); // negative numbers in brackets
   });
 });

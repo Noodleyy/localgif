@@ -119,6 +119,26 @@ describe("small videos", () => {
     expect(left.palette.some(isBlue)).toBe(false);
   });
 
+  it("moves the crop along its keyframes, timed from the start of the video", async () => {
+    const isRed = (c: { r: number; b: number }) => c.r > 200 && c.b < 60;
+    const isBlue = (c: { r: number; b: number }) => c.b > 200 && c.r < 60;
+    // from the left edge (red) at 0 s to the right edge (blue) at 1 s
+    const moving = { crop: { x: 0, y: 0, width: 16, height: 48 }, cropKeyframes: [{ time: 0, x: 0, y: 0 }, { time: 1, x: 48, y: 0 }], width: 16 };
+
+    const start = await convert(videos.redLeftBlueRight, opts({ ...moving, start: 0, end: 0.1 }));
+    expect(start.palette.some(isRed)).toBe(true);
+    expect(start.palette.some(isBlue)).toBe(false);
+
+    const middle = await convert(videos.redLeftBlueRight, opts({ ...moving, start: 0.45, end: 0.55 }));
+    expect(middle.palette.some(isRed) && middle.palette.some(isBlue)).toBe(true);
+
+    for (const speed of [1, 0.5]) {
+      const end = await convert(videos.redLeftBlueRight, opts({ ...moving, start: 0.9, end: 1, speed }));
+      expect(end.palette.some(isBlue)).toBe(true);
+      expect(end.palette.some(isRed)).toBe(false);
+    }
+  });
+
   it("handles a selection shorter than one GIF frame", async () => {
     const gif = await convert(videos.small, opts({ start: 1, end: 1.05, width: 320 }));
     expect(gif.frames).toBeGreaterThanOrEqual(1);
@@ -213,6 +233,8 @@ describe("size estimate", () => {
       [videos.bursty, opts({ end: 8.9, fps: 15, width: 480, colors: 32 })],
       [videos.large, opts({ end: 5, fps: 15, width: 480, crop: { x: 400, y: 100, width: 960, height: 720 } })],
       [videos.small, opts({ end: 2, fps: 20, width: 240, speed: 0.5 })],
+      // a crop moving from the top left to the bottom right (the estimate's one ffmpeg pass has it too)
+      [videos.large, opts({ end: 5, fps: 15, width: 480, crop: { x: 0, y: 0, width: 960, height: 540 }, cropKeyframes: [{ time: 0, x: 0, y: 0 }, { time: 5, x: 960, y: 540 }] })],
     ];
     for (const [file, o] of cases) {
       const frames = Math.round(((o.end - o.start) / (o.speed ?? 1)) * o.fps);
