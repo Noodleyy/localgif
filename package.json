@@ -16,7 +16,7 @@
   "dependencies": {
     "@ffmpeg/core": "0.12.10",
     "@ffmpeg/ffmpeg": "^0.12.15",
-    "next": "16.4.3",
+    "next": "16.4.6",
     "react": "^19.3.1",
     "react-dom": "^19.3.1"
   },
@@ -32,5 +32,10 @@
     "typescript": "^5",
     "typescript-eslint": "^8.71.2",
     "vitest": "^5.0.5"
+  },
+  "overrides": {
+    "eslint-plugin-jsx-a11y-x": {
+      "minimatch": "^11.0.8"
+    }
   }
 }
