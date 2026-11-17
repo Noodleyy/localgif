@@ -53,6 +53,7 @@ app/
                      and one for the size estimate; resets them to cancel or after a crash
   lib/settings.ts    remembers FPS and quality between visits (localStorage)
   lib/crop.ts        the crop rectangle: presets, dragging, typed values (all in video pixels)
+  lib/timelineView.ts the part of the video the timeline shows: zoom, pan, following the playhead, ticks
   lib/time.ts        clamp / frame-step helpers
   lib/format.ts      timecode, file size and duration formatting
   page.tsx           wires the hooks and components together, and the layout
@@ -68,12 +69,29 @@ scripts/             copy-ffmpeg.mjs
 tests/
   gif.test.ts        fast unit tests for the pure helpers
   crop.test.ts       the crop rectangle: presets, edges, minimum size, fixed ratios
+  timelineView.test.ts timeline zoom: around a point, limits, following the playhead, tick marks
   app.test.ts        remembered settings, converter download progress
   convert.test.ts    real MP4 -> GIF conversions through ffmpeg.wasm
   memory.test.ts     checks the out-of-memory estimate against ffmpeg.wasm's real memory use
   helpers.ts         runs ffmpeg.wasm in Node + a tiny GIF parser for assertions
   fixtures/          one small HEVC clip (ffmpeg.wasm can decode HEVC but not encode it)
 ```
+
+## Timeline zoom
+
+On a long video a pixel of the trim timeline is seconds wide, so it can zoom in (videos of 2 s and up):
+
+- **− / +** above it zoom out or in 2× around the playhead, down to 1 s across; **Fit** shows the whole
+  video again. **Ctrl/⌘ + wheel**, or a trackpad pinch, zooms around the pointer.
+- Zoomed in, an **overview** bar under the timeline shows the whole video, the trim and the playhead,
+  with the part shown as a window: drag it, click beside it, or use the arrow keys / Page Up / Down /
+  Home / End on it. Sideways scrolling (or Shift + wheel) over the timeline moves along too.
+- The view **follows the playhead**: playing on past the edge, it scrolls along; a jump (a keyframe, a
+  click in the overview) is centered. Dragging a trim handle past the end of the track scrolls along.
+- A trim handle outside the view waits at the edge, faded; it's still in the tab order, and focusing it
+  brings it into view. Tick marks sit at round times (0.05 s to 1 h apart), so they move with the view.
+
+The view logic is plain functions in `app/lib/timelineView.ts`; `Timeline.tsx` keeps the view in state.
 
 ## Crop
 
